@@ -76,6 +76,21 @@ class SmartRecruitersJobSyncPlugin
             'interval' => $minutes * 60,
             'display' => sprintf(__('Every %d Minutes'), $minutes)
         );
+
+        // Also provide fixed schedules for v2 runs-per-day (1-4 times per day)
+        $per_day = array(
+            1 => 24 * 60 * 60,
+            2 => 12 * 60 * 60,
+            3 => 8 * 60 * 60,
+            4 => 6 * 60 * 60,
+        );
+        foreach ($per_day as $times => $interval) {
+            $key_times = 'smartrecruiters_' . $times . '_times_per_day';
+            $schedules[$key_times] = array(
+                'interval' => $interval,
+                'display' => sprintf(__('SmartRecruiters: %dx per day'), $times)
+            );
+        }
         return $schedules;
     }
 
@@ -347,28 +362,48 @@ class SmartRecruitersJobSyncPlugin
                     btn.textContent = 'Syncing...';
                     status.innerHTML = '<p>Starting sync...</p>';
 
-                    fetch(ajaxurl, {
+                    fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: 'action=manual_smartrecruiters_sync&nonce=' + '<?php echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
+                        body: 'action=manual_smartrecruiters_sync&nonce=<?php echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
                     })
                         .then(response => response.json())
                         .then(data => {
-                            if (data.success) {
-                                status.innerHTML = '<p style="color: green;">' + data.data.message + '</p>';
-                            } else {
-                                status.innerHTML = '<p style="color: red;">Error: ' + data.data + '</p>';
-                            }
+                            console.log(data);
                         })
                         .catch(error => {
-                            status.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+                            console.error('Error:', error);
                         })
                         .finally(() => {
                             btn.disabled = false;
                             btn.textContent = 'Sync Jobs Now';
                         });
+
+
+
+                    // fetch(ajaxurl, {
+                    //     method: 'POST',
+                    //     headers: {
+                    //         'Content-Type': 'application/x-www-form-urlencoded',
+                    //     },
+                    //     body: 'action=manual_smartrecruiters_sync&nonce=' + '<?php //echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
+                    // })
+                    //     .then(response => response.json())
+                    //     .then(data => {
+                    //         // wnat to show the message in a console.log
+                    //         console.log(data);
+                    //         if (data.success) {
+                    //             status.innerHTML = '<p style="color: green;">' + data.data.message + '</p>';
+                    //         } else {
+                    //             status.innerHTML = '<p style="color: red;">Error: ' + data.data + '</p>';
+                    //         }
+                    //     })
+                    //     .catch(error => {
+                    //         status.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+                    //     })
+                    //     .finally(() => {
+                    //         btn.disabled = false;
+                    //         btn.textContent = 'Sync Jobs Now';
+                    //     });
                 });
             </script>
         </div>
@@ -406,6 +441,14 @@ class SmartRecruitersJobSyncPlugin
         );
 
         add_settings_field(
+            'limit',
+            'Limit',
+            array($this, 'limit_callback'),
+            'smartrecruiters_job_sync_settings',
+            'smartrecruiters_api_section'
+        );
+
+        add_settings_field(
             'client_secret',
             'Client Secret',
             array($this, 'client_secret_callback'),
@@ -417,6 +460,22 @@ class SmartRecruitersJobSyncPlugin
             'sync_interval_minutes',
             'Sync Interval (minutes)',
             array($this, 'sync_interval_minutes_callback'),
+            'smartrecruiters_job_sync_settings',
+            'smartrecruiters_api_section'
+        );
+
+        add_settings_field(
+            'sync_version',
+            'Sync Version',
+            array($this, 'sync_version_callback'),
+            'smartrecruiters_job_sync_settings',
+            'smartrecruiters_api_section'
+        );
+
+        add_settings_field(
+            'runs_per_day',
+            'Runs Per Day (v2 only)',
+            array($this, 'runs_per_day_callback'),
             'smartrecruiters_job_sync_settings',
             'smartrecruiters_api_section'
         );
@@ -461,6 +520,17 @@ class SmartRecruitersJobSyncPlugin
         echo '<input type="password" name="smartrecruiters_job_sync_options[client_secret]" value="' . esc_attr($value) . '" style="width: 100%;" />';
     }
 
+
+    /**
+     * Limit callback
+     */
+    public function limit_callback()
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $value = isset($options['limit']) ? $options['limit'] : '100';
+        echo '<input type="number" name="smartrecruiters_job_sync_options[limit]" value="' . esc_attr($value) . '" min="1" max="1000" />';
+    }
+
     /**
      * Sync interval callback
      */
@@ -473,19 +543,67 @@ class SmartRecruitersJobSyncPlugin
     }
 
     /**
+     * Sync version callback
+     */
+    public function sync_version_callback()
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $value = isset($options['sync_version']) ? $options['sync_version'] : 'v1';
+        echo '<select name="smartrecruiters_job_sync_options[sync_version]">'
+            . '<option value="v1"' . selected($value, 'v1', false) . '>Version 1 (list only)</option>'
+            . '<option value="v2"' . selected($value, 'v2', false) . '>Version 2 (fetch single job details)</option>'
+            . '</select>';
+        echo '<p class="description">Select syncing strategy. v2 fetches each job\'s detailed data.</p>';
+    }
+
+    /**
+     * Runs per day callback (for v2)
+     */
+    public function runs_per_day_callback()
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $value = isset($options['runs_per_day']) ? intval($options['runs_per_day']) : 2;
+        if ($value < 1) {
+            $value = 1;
+        }
+        if ($value > 4) {
+            $value = 4;
+        }
+        echo '<select name="smartrecruiters_job_sync_options[runs_per_day]">'
+            . '<option value="1"' . selected($value, 1, false) . '>1</option>'
+            . '<option value="2"' . selected($value, 2, false) . '>2</option>'
+            . '<option value="3"' . selected($value, 3, false) . '>3</option>'
+            . '<option value="4"' . selected($value, 4, false) . '>4</option>'
+            . '</select>';
+        echo '<p class="description">How many times per day to run (applies to v2 only)</p>';
+    }
+
+    /**
      * Schedule cron job
      */
     public function schedule_cron()
     {
         $options = get_option('smartrecruiters_job_sync_options');
-        $minutes = isset($options['sync_interval_minutes']) ? intval($options['sync_interval_minutes']) : 10;
-        if ($minutes < 1) {
-            $minutes = 1;
+        $version = isset($options['sync_version']) ? $options['sync_version'] : 'v1';
+        if ($version === 'v2') {
+            $runs = isset($options['runs_per_day']) ? intval($options['runs_per_day']) : 2;
+            if ($runs < 1) {
+                $runs = 1;
+            }
+            if ($runs > 4) {
+                $runs = 4;
+            }
+            $schedule_key = 'smartrecruiters_' . $runs . '_times_per_day';
+        } else {
+            $minutes = isset($options['sync_interval_minutes']) ? intval($options['sync_interval_minutes']) : 10;
+            if ($minutes < 1) {
+                $minutes = 1;
+            }
+            if ($minutes > 1440) {
+                $minutes = 1440;
+            }
+            $schedule_key = 'smartrecruiters_every_' . $minutes . '_minutes';
         }
-        if ($minutes > 1440) {
-            $minutes = 1440;
-        }
-        $schedule_key = 'smartrecruiters_every_' . $minutes . '_minutes';
 
         if (!wp_next_scheduled('smartrecruiters_job_sync_cron')) {
             wp_schedule_event(time(), $schedule_key, 'smartrecruiters_job_sync_cron');
@@ -501,14 +619,26 @@ class SmartRecruitersJobSyncPlugin
         wp_clear_scheduled_hook('smartrecruiters_job_sync_cron');
 
         // Schedule with new interval
-        $minutes = isset($value['sync_interval_minutes']) ? intval($value['sync_interval_minutes']) : 10;
-        if ($minutes < 1) {
-            $minutes = 1;
+        $version = isset($value['sync_version']) ? $value['sync_version'] : 'v1';
+        if ($version === 'v2') {
+            $runs = isset($value['runs_per_day']) ? intval($value['runs_per_day']) : 2;
+            if ($runs < 1) {
+                $runs = 1;
+            }
+            if ($runs > 4) {
+                $runs = 4;
+            }
+            $schedule_key = 'smartrecruiters_' . $runs . '_times_per_day';
+        } else {
+            $minutes = isset($value['sync_interval_minutes']) ? intval($value['sync_interval_minutes']) : 10;
+            if ($minutes < 1) {
+                $minutes = 1;
+            }
+            if ($minutes > 1440) {
+                $minutes = 1440;
+            }
+            $schedule_key = 'smartrecruiters_every_' . $minutes . '_minutes';
         }
-        if ($minutes > 1440) {
-            $minutes = 1440;
-        }
-        $schedule_key = 'smartrecruiters_every_' . $minutes . '_minutes';
         if (!wp_next_scheduled('smartrecruiters_job_sync_cron')) {
             wp_schedule_event(time(), $schedule_key, 'smartrecruiters_job_sync_cron');
         }
@@ -522,13 +652,13 @@ class SmartRecruitersJobSyncPlugin
         check_ajax_referer('manual_smartrecruiters_sync_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
-            wp_die('Unauthorized');
+            wp_send_json_error('Unauthorized', 403);
         }
 
         $result = $this->sync_jobs();
 
         if ($result['success']) {
-            wp_send_json_success($result['message']);
+            wp_send_json_success(array('message' => $result['message']));
         } else {
             wp_send_json_error($result['message']);
         }
@@ -561,8 +691,14 @@ class SmartRecruitersJobSyncPlugin
         error_log('SmartRecruiters: Client ID: ' . $options['client_id']);
         error_log('SmartRecruiters: Client Secret: ' . (empty($options['client_secret']) ? 'EMPTY' : 'SET'));
 
-        $api_sync = new SmartRecruitersAPISync();
-        return $api_sync->sync_jobs();
+        $version = isset($options['sync_version']) ? $options['sync_version'] : 'v1';
+        if ($version === 'v2') {
+            $api_sync = new SmartRecruitersAPISyncV2();
+            return $api_sync->sync_jobs();
+        } else {
+            $api_sync = new SmartRecruitersAPISync();
+            return $api_sync->sync_jobs();
+        }
     }
 
     /**
@@ -726,8 +862,9 @@ class SmartRecruitersAPISync
      */
     private function fetch_jobs_from_api($access_token)
     {
+        $limit = $this->options['limit'] ?? 100;
         // SmartRecruiters jobs endpoint
-        $jobs_url = $this->options['api_url'] . '/jobs';
+        $jobs_url = $this->options['api_url'] . '/jobs?limit=' . $limit;
 
         error_log('SmartRecruiters: Fetching jobs from URL: ' . $jobs_url);
         error_log('SmartRecruiters: Using access token: ' . substr($access_token, 0, 20) . '...');
@@ -736,7 +873,8 @@ class SmartRecruitersAPISync
             'timeout' => 30,
             'headers' => array(
                 'Authorization' => 'Bearer ' . $access_token,
-                'Content-Type' => 'application/json'
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
             )
         ));
 
@@ -936,6 +1074,267 @@ class SmartRecruitersAPISync
         }
 
         return implode(' - ', $salary_parts);
+    }
+}
+
+/**
+ * SmartRecruiters API Sync Class - Version 2
+ * Fetches list of jobs, then fetches each job's details and stores them
+ */
+class SmartRecruitersAPISyncV2
+{
+
+    private $options;
+
+    public function __construct()
+    {
+        $this->options = get_option('smartrecruiters_job_sync_options');
+    }
+
+    public function sync_jobs()
+    {
+        try {
+            $access_token = $this->get_access_token();
+            if (!$access_token) {
+                throw new Exception('Failed to obtain access token from SmartRecruiters API');
+            }
+
+            // Get the list of jobs first
+            $jobs = $this->fetch_jobs_from_api($access_token);
+            if (!is_array($jobs)) {
+                throw new Exception('Failed to fetch jobs list from SmartRecruiters API');
+            }
+
+            // Delete all existing job posts before re-creating
+            $this->delete_all_existing_jobs();
+
+            $added = 0;
+            foreach ($jobs as $job_summary) {
+                $job_id = $job_summary['id'] ?? null;
+                if (!$job_id) {
+                    continue;
+                }
+
+                $job_details = $this->fetch_single_job_details($access_token, $job_summary);
+                if (!$job_details) {
+                    // Fallback to summary if details missing
+                    $job_details = $job_summary;
+                }
+
+                $this->create_job($job_details);
+                $added++;
+            }
+
+            return array(
+                'success' => true,
+                'message' => sprintf('SmartRecruiters v2 sync completed: %d jobs refreshed with details', $added)
+            );
+
+        } catch (Exception $e) {
+            error_log('SmartRecruiters Job Sync V2 Error: ' . $e->getMessage());
+            return array(
+                'success' => false,
+                'message' => 'SmartRecruiters v2 sync failed: ' . $e->getMessage()
+            );
+        }
+    }
+
+    private function get_access_token()
+    {
+        $token_url = $this->options['api_url'] . '/identity/oauth/token';
+
+        $data = array(
+            'grant_type' => 'client_credentials',
+            'client_id' => $this->options['client_id'],
+            'client_secret' => $this->options['client_secret']
+        );
+
+        $response = wp_remote_post($token_url, array(
+            'body' => $data,
+            'timeout' => 30,
+            'headers' => array(
+                'Content-Type' => 'application/x-www-form-urlencoded'
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            return false;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+
+        if ($response_code !== 200) {
+            return false;
+        }
+
+        $token_data = json_decode($body, true);
+        if (isset($token_data['access_token'])) {
+            return $token_data['access_token'];
+        }
+        return false;
+    }
+
+    private function fetch_jobs_from_api($access_token)
+    {
+        $limit = $this->options['limit'] ?? 100;
+        $jobs_url = $this->options['api_url'] . '/jobs?limit=' . $limit;
+
+        $response = wp_remote_get($jobs_url, array(
+            'timeout' => 30,
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            return false;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        if ($response_code !== 200) {
+            return false;
+        }
+
+        $data = json_decode($body, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return false;
+        }
+
+        return isset($data['content']) ? $data['content'] : $data;
+    }
+
+    private function fetch_single_job_details($access_token, $job_summary)
+    {
+        // Prefer details URL from actions if provided
+        $details_url = $job_summary['actions']['details']['url'] ?? null;
+        if (!$details_url && !empty($job_summary['id'])) {
+            $details_url = rtrim($this->options['api_url'], '/') . '/jobs/' . $job_summary['id'];
+        }
+        if (!$details_url) {
+            return false;
+        }
+
+        $response = wp_remote_get($details_url, array(
+            'timeout' => 30,
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $access_token,
+                'Accept' => 'application/json'
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            return false;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        if ($response_code !== 200) {
+            return false;
+        }
+
+        $data = json_decode($body, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return false;
+        }
+        return $data;
+    }
+
+    private function delete_all_existing_jobs()
+    {
+        global $wpdb;
+        $job_posts = $wpdb->get_results(
+            "SELECT ID FROM {$wpdb->posts} WHERE post_type = 'job'"
+        );
+        foreach ($job_posts as $post) {
+            wp_delete_post($post->ID, true);
+        }
+    }
+
+    private function create_job($job_data)
+    {
+        $title = $job_data['title'] ?? 'Untitled Job';
+        $description = $this->format_job_description($job_data);
+
+        $post_data = array(
+            'post_title' => $title,
+            'post_content' => $description,
+            'post_status' => 'publish',
+            'post_type' => 'job',
+            'meta_input' => array(
+                '_job_title' => $job_data['title'] ?? '',
+                '_job_ref_number' => $job_data['refNumber'] ?? '',
+                '_job_status' => $job_data['status'] ?? '',
+                '_job_posting_status' => $job_data['postingStatus'] ?? '',
+                '_job_department' => $job_data['department']['label'] ?? '',
+                '_job_location' => $this->format_location($job_data['location'] ?? array()),
+                '_job_language' => $job_data['language']['label'] ?? '',
+                '_job_country_code' => $job_data['location']['countryCode'] ?? '',
+                '_job_city' => $job_data['location']['city'] ?? '',
+                '_job_region_code' => $job_data['location']['regionCode'] ?? '',
+                '_job_remote' => !empty($job_data['location']['remote']) ? 'REMOTE' : 'ONSITE',
+                '_job_created_on' => $job_data['createdOn'] ?? '',
+                '_job_updated_on' => $job_data['updatedOn'] ?? '',
+                '_job_last_activity' => $job_data['lastActivityOn'] ?? '',
+                '_job_apply_url' => !empty($job_data['refNumber']) ? ('https://jobs.smartrecruiters.com/' . $job_data['refNumber']) : '',
+                '_job_external_id' => $job_data['id'] ?? '',
+                '_job_api_url' => $job_data['actions']['details']['url'] ?? '',
+                '_job_last_synced' => time(),
+                '_job_sync_status' => 'synced'
+            )
+        );
+
+        return wp_insert_post($post_data);
+    }
+
+    private function format_job_description($job_data)
+    {
+        $description = '';
+        $description .= '<h3>Job Information</h3>';
+        $description .= '<p><strong>Title:</strong> ' . ($job_data['title'] ?? 'N/A') . '</p>';
+        $description .= '<p><strong>Reference Number:</strong> ' . ($job_data['refNumber'] ?? 'N/A') . '</p>';
+        $description .= '<p><strong>Status:</strong> ' . ($job_data['status'] ?? 'N/A') . '</p>';
+        $description .= '<p><strong>Posting Status:</strong> ' . ($job_data['postingStatus'] ?? 'N/A') . '</p>';
+        if (isset($job_data['department']['label'])) {
+            $description .= '<p><strong>Department:</strong> ' . $job_data['department']['label'] . '</p>';
+        }
+        if (isset($job_data['location'])) {
+            $location = $this->format_location($job_data['location']);
+            if ($location) {
+                $description .= '<p><strong>Location:</strong> ' . $location . '</p>';
+            }
+        }
+        if (isset($job_data['language']['label'])) {
+            $description .= '<p><strong>Language:</strong> ' . $job_data['language']['label'] . '</p>';
+        }
+        if (isset($job_data['createdOn'])) {
+            $description .= '<p><strong>Created:</strong> ' . date('Y-m-d H:i:s', strtotime($job_data['createdOn'])) . '</p>';
+        }
+        if (isset($job_data['updatedOn'])) {
+            $description .= '<p><strong>Last Updated:</strong> ' . date('Y-m-d H:i:s', strtotime($job_data['updatedOn'])) . '</p>';
+        }
+        return $description;
+    }
+
+    private function format_location($location_data)
+    {
+        if (empty($location_data)) {
+            return '';
+        }
+        $location_parts = array();
+        if (isset($location_data['city'])) {
+            $location_parts[] = $location_data['city'];
+        }
+        if (isset($location_data['regionCode'])) {
+            $location_parts[] = $location_data['regionCode'];
+        }
+        if (isset($location_data['country'])) {
+            $location_parts[] = $location_data['country'];
+        }
+        return implode(', ', $location_parts);
     }
 }
 
