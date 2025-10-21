@@ -663,7 +663,7 @@ class SmartRecruitersAPISyncV2
         $all_jobs = array();
         $offset = 0;
         $limit = 100;
-        
+
         do {
             $jobs_url = $this->options['api_url'] . '/jobs?limit=' . $limit . '&offset=' . $offset;
 
@@ -683,7 +683,7 @@ class SmartRecruitersAPISyncV2
 
             $response_code = wp_remote_retrieve_response_code($response);
             $body = wp_remote_retrieve_body($response);
-            
+
             if ($response_code !== 200) {
                 error_log('SmartRecruiters: API Error - HTTP ' . $response_code . ': ' . $body);
                 break;
@@ -702,7 +702,7 @@ class SmartRecruitersAPISyncV2
 
             $all_jobs = array_merge($all_jobs, $jobs);
             $offset += $limit;
-            
+
             error_log('SmartRecruiters: Fetched ' . count($jobs) . ' jobs, total so far: ' . count($all_jobs));
 
         } while (count($jobs) === $limit);
@@ -736,7 +736,7 @@ class SmartRecruitersAPISyncV2
 
         $response_code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
-        
+
         if ($response_code !== 200) {
             error_log('SmartRecruiters: Job details API Error for ID ' . $job_id . ' - HTTP ' . $response_code . ': ' . $body);
             return false;
@@ -747,7 +747,7 @@ class SmartRecruitersAPISyncV2
             error_log('SmartRecruiters: Job details JSON Decode Error for ID ' . $job_id . ': ' . json_last_error_msg());
             return false;
         }
-        
+
         return $data;
     }
 
