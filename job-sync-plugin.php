@@ -157,6 +157,10 @@ class SmartRecruitersJobSyncPlugin
         $apply_url = get_post_meta($post->ID, '_job_apply_url', true);
         $external_id = get_post_meta($post->ID, '_job_external_id', true);
         $api_url = get_post_meta($post->ID, '_job_api_url', true);
+        $experience_level = get_post_meta($post->ID, '_job_experience_level', true);
+        $location_full = get_post_meta($post->ID, '_job_location_full', true);
+        $actions_full = get_post_meta($post->ID, '_job_actions_full', true);
+        $job_ad_full = get_post_meta($post->ID, '_job_ad_full', true);
 
         ?>
         <table class="form-table">
@@ -224,6 +228,23 @@ class SmartRecruitersJobSyncPlugin
                 <th><label for="job_api_url">API URL</label></th>
                 <td><input type="url" id="job_api_url" name="job_api_url" value="<?php echo esc_attr($api_url); ?>"
                         style="width: 100%;" readonly /></td>
+            </tr>
+            <tr>
+                <th><label for="job_experience_level">Experience Level</label></th>
+                <td><input type="text" id="job_experience_level" name="job_experience_level" value="<?php echo esc_attr($experience_level); ?>"
+                        style="width: 100%;" readonly /></td>
+            </tr>
+            <tr>
+                <th><label for="job_location_full">Location (Full Object)</label></th>
+                <td><textarea id="job_location_full" name="job_location_full" style="width: 100%; height: 100px;" readonly><?php echo esc_textarea($location_full); ?></textarea></td>
+            </tr>
+            <tr>
+                <th><label for="job_actions_full">Actions (Full Object)</label></th>
+                <td><textarea id="job_actions_full" name="job_actions_full" style="width: 100%; height: 100px;" readonly><?php echo esc_textarea($actions_full); ?></textarea></td>
+            </tr>
+            <tr>
+                <th><label for="job_ad_full">Job Ad (Full Object)</label></th>
+                <td><textarea id="job_ad_full" name="job_ad_full" style="width: 100%; height: 150px;" readonly><?php echo esc_textarea($job_ad_full); ?></textarea></td>
             </tr>
         </table>
         <?php
@@ -773,23 +794,44 @@ class SmartRecruitersAPISyncV2
             'post_status' => 'publish',
             'post_type' => 'job',
             'meta_input' => array(
+                // Basic job info
                 '_job_title' => $job_data['title'] ?? '',
                 '_job_ref_number' => $job_data['refNumber'] ?? '',
                 '_job_status' => $job_data['status'] ?? '',
                 '_job_posting_status' => $job_data['postingStatus'] ?? '',
+                '_job_external_id' => $job_data['id'] ?? '',
+                
+                // Department and language
                 '_job_department' => $job_data['department']['label'] ?? '',
-                '_job_location' => $this->format_location($job_data['location'] ?? array()),
                 '_job_language' => $job_data['language']['label'] ?? '',
+                
+                // Experience level
+                '_job_experience_level' => $job_data['experienceLevel'] ?? '',
+                
+                // Full location object (JSON)
+                '_job_location_full' => json_encode($job_data['location'] ?? array()),
+                '_job_location' => $this->format_location($job_data['location'] ?? array()),
                 '_job_country_code' => $job_data['location']['countryCode'] ?? '',
                 '_job_city' => $job_data['location']['city'] ?? '',
                 '_job_region_code' => $job_data['location']['regionCode'] ?? '',
                 '_job_remote' => !empty($job_data['location']['remote']) ? 'REMOTE' : 'ONSITE',
+                
+                // Full actions object (JSON)
+                '_job_actions_full' => json_encode($job_data['actions'] ?? array()),
+                '_job_api_url' => $job_data['actions']['details']['url'] ?? '',
+                
+                // Job Ad sections (full object)
+                '_job_ad_full' => json_encode($job_data['jobAd'] ?? array()),
+                
+                // Dates
                 '_job_created_on' => $job_data['createdOn'] ?? '',
                 '_job_updated_on' => $job_data['updatedOn'] ?? '',
                 '_job_last_activity' => $job_data['lastActivityOn'] ?? '',
+                
+                // Apply URL
                 '_job_apply_url' => !empty($job_data['refNumber']) ? ('https://jobs.smartrecruiters.com/' . $job_data['refNumber']) : '',
-                '_job_external_id' => $job_data['id'] ?? '',
-                '_job_api_url' => $job_data['actions']['details']['url'] ?? '',
+                
+                // Sync info
                 '_job_last_synced' => time(),
                 '_job_sync_status' => 'synced'
             )
