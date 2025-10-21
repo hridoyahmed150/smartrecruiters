@@ -347,28 +347,48 @@ class SmartRecruitersJobSyncPlugin
                     btn.textContent = 'Syncing...';
                     status.innerHTML = '<p>Starting sync...</p>';
 
-                    fetch(ajaxurl, {
+                    fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: 'action=manual_smartrecruiters_sync&nonce=' + '<?php echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
+                        body: 'action=manual_smartrecruiters_sync&nonce=<?php echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
                     })
                         .then(response => response.json())
                         .then(data => {
-                            if (data.success) {
-                                status.innerHTML = '<p style="color: green;">' + data.data.message + '</p>';
-                            } else {
-                                status.innerHTML = '<p style="color: red;">Error: ' + data.data + '</p>';
-                            }
+                            console.log(data);
                         })
                         .catch(error => {
-                            status.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+                            console.error('Error:', error);
                         })
                         .finally(() => {
                             btn.disabled = false;
                             btn.textContent = 'Sync Jobs Now';
                         });
+
+
+
+                    // fetch(ajaxurl, {
+                    //     method: 'POST',
+                    //     headers: {
+                    //         'Content-Type': 'application/x-www-form-urlencoded',
+                    //     },
+                    //     body: 'action=manual_smartrecruiters_sync&nonce=' + '<?php //echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
+                    // })
+                    //     .then(response => response.json())
+                    //     .then(data => {
+                    //         // wnat to show the message in a console.log
+                    //         console.log(data);
+                    //         if (data.success) {
+                    //             status.innerHTML = '<p style="color: green;">' + data.data.message + '</p>';
+                    //         } else {
+                    //             status.innerHTML = '<p style="color: red;">Error: ' + data.data + '</p>';
+                    //         }
+                    //     })
+                    //     .catch(error => {
+                    //         status.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+                    //     })
+                    //     .finally(() => {
+                    //         btn.disabled = false;
+                    //         btn.textContent = 'Sync Jobs Now';
+                    //     });
                 });
             </script>
         </div>
@@ -401,6 +421,14 @@ class SmartRecruitersJobSyncPlugin
             'client_id',
             'Client ID',
             array($this, 'client_id_callback'),
+            'smartrecruiters_job_sync_settings',
+            'smartrecruiters_api_section'
+        );
+
+        add_settings_field(
+            'limit',
+            'Limit',
+            array($this, 'limit_callback'),
             'smartrecruiters_job_sync_settings',
             'smartrecruiters_api_section'
         );
@@ -459,6 +487,17 @@ class SmartRecruitersJobSyncPlugin
         $options = get_option('smartrecruiters_job_sync_options');
         $value = isset($options['client_secret']) ? $options['client_secret'] : '';
         echo '<input type="password" name="smartrecruiters_job_sync_options[client_secret]" value="' . esc_attr($value) . '" style="width: 100%;" />';
+    }
+
+
+    /**
+     * Limit callback
+     */
+    public function limit_callback()
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $value = isset($options['limit']) ? $options['limit'] : '100';
+        echo '<input type="number" name="smartrecruiters_job_sync_options[limit]" value="' . esc_attr($value) . '" min="1" max="1000" />';
     }
 
     /**
@@ -528,9 +567,9 @@ class SmartRecruitersJobSyncPlugin
         $result = $this->sync_jobs();
 
         if ($result['success']) {
-            wp_send_json_success($result['message']);
+            echo '<div class="notice notice-success"><p>' . $result['message'] . '</p></div>';
         } else {
-            wp_send_json_error($result['message']);
+            echo '<div class="notice notice-error"><p>' . $result['message'] . '</p></div>';
         }
     }
 
@@ -726,8 +765,9 @@ class SmartRecruitersAPISync
      */
     private function fetch_jobs_from_api($access_token)
     {
+        $limit = $this->options['limit'] ?? 100;
         // SmartRecruiters jobs endpoint
-        $jobs_url = $this->options['api_url'] . '/jobs';
+        $jobs_url = $this->options['api_url'] . '/jobs?limit=' . $limit;
 
         error_log('SmartRecruiters: Fetching jobs from URL: ' . $jobs_url);
         error_log('SmartRecruiters: Using access token: ' . substr($access_token, 0, 20) . '...');
@@ -736,7 +776,8 @@ class SmartRecruitersAPISync
             'timeout' => 30,
             'headers' => array(
                 'Authorization' => 'Bearer ' . $access_token,
-                'Content-Type' => 'application/json'
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
             )
         ));
 
