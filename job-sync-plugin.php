@@ -788,6 +788,24 @@ class SmartRecruitersAPISyncV2
 
     private function create_job($job_data)
     {
+        // Debug: Log the actual API response structure
+        error_log('SmartRecruiters: Job data structure: ' . print_r(array_keys($job_data), true));
+        error_log('SmartRecruiters: Full job data: ' . json_encode($job_data, JSON_PRETTY_PRINT));
+        
+        if (isset($job_data['jobAd'])) {
+            error_log('SmartRecruiters: jobAd found: ' . print_r($job_data['jobAd'], true));
+        } else {
+            error_log('SmartRecruiters: No jobAd field found in API response');
+        }
+        
+        if (isset($job_data['jobAdSections'])) {
+            error_log('SmartRecruiters: jobAdSections found: ' . print_r($job_data['jobAdSections'], true));
+        }
+        
+        if (isset($job_data['ad'])) {
+            error_log('SmartRecruiters: ad field found: ' . print_r($job_data['ad'], true));
+        }
+
         $title = $job_data['title'] ?? 'Untitled Job';
         $description = $this->format_job_description($job_data);
 
@@ -823,8 +841,8 @@ class SmartRecruitersAPISyncV2
                 '_job_actions_full' => json_encode($job_data['actions'] ?? array()),
                 '_job_api_url' => $job_data['actions']['details']['url'] ?? '',
 
-                // Job Ad sections (full object)
-                '_job_ad_full' => json_encode($job_data['jobAd'] ?? array()),
+                // Job Ad sections (full object) - check multiple possible field names
+                '_job_ad_full' => json_encode($job_data['jobAd'] ?? $job_data['jobAdSections'] ?? $job_data['ad'] ?? array()),
 
                 // Dates
                 '_job_created_on' => $job_data['createdOn'] ?? '',
