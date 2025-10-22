@@ -170,6 +170,8 @@ class SmartRecruitersJobSyncPlugin
         $job_ad_additional_information_title = get_post_meta($post->ID, '_job_ad_additional_information_title', true);
         $job_ad_additional_information_text = get_post_meta($post->ID, '_job_ad_additional_information_text', true);
         $job_ad_videos_urls = get_post_meta($post->ID, '_job_ad_videos_urls', true);
+        $job_partners_name = get_post_meta($post->ID, '_job_partners_name', true);
+        $job_properties_full = get_post_meta($post->ID, '_job_properties_full', true);
 
         ?>
         <table class="form-table">
@@ -298,6 +300,16 @@ class SmartRecruitersJobSyncPlugin
                 <th><label>Videos (URLs)</label></th>
                 <td><textarea style="width: 100%; height: 80px;"
                         readonly><?php echo esc_textarea($job_ad_videos_urls); ?></textarea></td>
+            </tr>
+            <tr>
+                <th><label for="job_partners_name">Partners Name</label></th>
+                <td><input type="text" id="job_partners_name" name="job_partners_name"
+                        value="<?php echo esc_attr($job_partners_name); ?>" style="width: 100%;" readonly /></td>
+            </tr>
+            <tr>
+                <th><label for="job_properties_full">Properties (Full Object)</label></th>
+                <td><textarea id="job_properties_full" name="job_properties_full" style="width: 100%; height: 150px;"
+                        readonly><?php echo esc_textarea($job_properties_full); ?></textarea></td>
             </tr>
         </table>
         <?php
@@ -1074,6 +1086,10 @@ class SmartRecruitersAPISync
                 // Original jobs list summary object
                 '_job_summary_full' => json_encode($job_data['__summary'] ?? array()),
 
+                // Properties (full object + Partners extraction)
+                '_job_properties_full' => json_encode($job_data['properties'] ?? array()),
+                '_job_partners_name' => $this->extract_partners_name($job_data['properties'] ?? array()),
+
                 // Dates
                 '_job_created_on' => $job_data['createdOn'] ?? '',
                 '_job_updated_on' => $job_data['updatedOn'] ?? '',
@@ -1136,6 +1152,23 @@ class SmartRecruitersAPISync
             $location_parts[] = $location_data['country'];
         }
         return implode(', ', $location_parts);
+    }
+
+    private function extract_partners_name($properties)
+    {
+        if (!is_array($properties)) {
+            return '';
+        }
+
+        foreach ($properties as $property) {
+            if (isset($property['key']) && $property['key'] === 'Partners') {
+                if (isset($property['value']['label'])) {
+                    return $property['value']['label'];
+                }
+            }
+        }
+
+        return '';
     }
 }
 
