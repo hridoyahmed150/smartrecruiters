@@ -44,6 +44,14 @@ class SmartRecruitersJobSyncPlugin
 
         // AJAX hooks for manual sync
         add_action('wp_ajax_manual_smartrecruiters_sync', array($this, 'manual_sync_ajax'));
+        
+        // AJAX hooks for webhook management
+        add_action('wp_ajax_create_smartrecruiters_webhook', array($this, 'create_webhook_ajax'));
+        add_action('wp_ajax_delete_smartrecruiters_webhook', array($this, 'delete_webhook_ajax'));
+        
+        // Webhook endpoint for real-time job updates
+        add_action('init', array($this, 'add_webhook_endpoint'));
+        add_action('template_redirect', array($this, 'handle_webhook_request'));
     }
 
     /**
@@ -413,6 +421,13 @@ class SmartRecruitersJobSyncPlugin
                 placeholder="Logs will appear here..."></textarea>
 
             <hr>
+            <h2>Webhook Management</h2>
+            <p>Manage real-time webhook subscriptions for instant job updates.</p>
+            <button type="button" id="create-webhook-btn" class="button button-secondary">Create Webhook Subscription</button>
+            <button type="button" id="delete-webhook-btn" class="button button-secondary">Delete Webhook Subscription</button>
+            <div id="webhook-status" style="margin-top: 10px;"></div>
+
+            <hr>
             <h2>Next Scheduled Runs</h2>
             <div id="next-runs">
                 <?php
@@ -479,8 +494,68 @@ class SmartRecruitersJobSyncPlugin
                             btn.disabled = false;
                             btn.textContent = 'Sync Jobs Now';
                         });
+                });
 
+                // Webhook management
+                document.getElementById('create-webhook-btn').addEventListener('click', function () {
+                    var btn = this;
+                    var status = document.getElementById('webhook-status');
 
+                    btn.disabled = true;
+                    btn.textContent = 'Creating...';
+                    status.innerHTML = '<p>Creating webhook subscription...</p>';
+
+                    fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: 'action=create_smartrecruiters_webhook&nonce=<?php echo wp_create_nonce('webhook_management_nonce'); ?>'
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                status.innerHTML = '<p style="color: green;">' + (data.data.message || 'Webhook created successfully') + '</p>';
+                            } else {
+                                status.innerHTML = '<p style="color: red;">' + (data.data || 'Failed to create webhook') + '</p>';
+                            }
+                        })
+                        .catch(error => {
+                            status.innerHTML = '<p style="color: red;">Request error: ' + error.message + '</p>';
+                        })
+                        .finally(() => {
+                            btn.disabled = false;
+                            btn.textContent = 'Create Webhook Subscription';
+                        });
+                });
+
+                document.getElementById('delete-webhook-btn').addEventListener('click', function () {
+                    var btn = this;
+                    var status = document.getElementById('webhook-status');
+
+                    btn.disabled = true;
+                    btn.textContent = 'Deleting...';
+                    status.innerHTML = '<p>Deleting webhook subscription...</p>';
+
+                    fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: 'action=delete_smartrecruiters_webhook&nonce=<?php echo wp_create_nonce('webhook_management_nonce'); ?>'
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                status.innerHTML = '<p style="color: green;">' + (data.data.message || 'Webhook deleted successfully') + '</p>';
+                            } else {
+                                status.innerHTML = '<p style="color: red;">' + (data.data || 'Failed to delete webhook') + '</p>';
+                            }
+                        })
+                        .catch(error => {
+                            status.innerHTML = '<p style="color: red;">Request error: ' + error.message + '</p>';
+                        })
+                        .finally(() => {
+                            btn.disabled = false;
+                            btn.textContent = 'Delete Webhook Subscription';
+                        });
+                });
 
                     // fetch(ajaxurl, {
                     //     method: 'POST',
@@ -574,6 +649,30 @@ class SmartRecruitersJobSyncPlugin
             'smartrecruiters_job_sync_settings',
             'smartrecruiters_api_section'
         );
+
+        // Webhook settings section
+        add_settings_section(
+            'smartrecruiters_webhook_section',
+            'Webhook Configuration',
+            array($this, 'webhook_section_callback'),
+            'smartrecruiters_job_sync_settings'
+        );
+
+        add_settings_field(
+            'webhook_enabled',
+            'Enable Webhooks',
+            array($this, 'webhook_enabled_callback'),
+            'smartrecruiters_job_sync_settings',
+            'smartrecruiters_webhook_section'
+        );
+
+        add_settings_field(
+            'webhook_secret',
+            'Webhook Secret',
+            array($this, 'webhook_secret_callback'),
+            'smartrecruiters_job_sync_settings',
+            'smartrecruiters_webhook_section'
+        );
     }
 
     /**
@@ -649,6 +748,39 @@ class SmartRecruitersJobSyncPlugin
         echo '<p class="description">Second run time (used only if Runs Per Day = 2)</p>';
     }
 
+    /**
+     * Webhook section callback
+     */
+    public function webhook_section_callback()
+    {
+        echo '<p>Configure webhook settings for real-time job updates from SmartRecruiters.</p>';
+        $webhook_url = home_url('/smartrecruiters-webhook/');
+        echo '<p><strong>Webhook URL:</strong> <code>' . esc_html($webhook_url) . '</code></p>';
+        echo '<p><em>Copy this URL to your SmartRecruiters webhook subscription.</em></p>';
+    }
+
+    /**
+     * Webhook enabled callback
+     */
+    public function webhook_enabled_callback()
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $value = isset($options['webhook_enabled']) ? $options['webhook_enabled'] : '0';
+        echo '<input type="checkbox" name="smartrecruiters_job_sync_options[webhook_enabled]" value="1"' . checked($value, '1', false) . ' />';
+        echo '<p class="description">Enable real-time webhook updates (requires webhook subscription in SmartRecruiters)</p>';
+    }
+
+    /**
+     * Webhook secret callback
+     */
+    public function webhook_secret_callback()
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $value = isset($options['webhook_secret']) ? $options['webhook_secret'] : '';
+        echo '<input type="text" name="smartrecruiters_job_sync_options[webhook_secret]" value="' . esc_attr($value) . '" style="width: 100%;" />';
+        echo '<p class="description">Secret key for webhook verification (optional but recommended for security)</p>';
+    }
+
 
 
     /**
@@ -701,6 +833,162 @@ class SmartRecruitersJobSyncPlugin
     }
 
     /**
+     * Add webhook endpoint
+     */
+    public function add_webhook_endpoint()
+    {
+        add_rewrite_rule('^smartrecruiters-webhook/?$', 'index.php?smartrecruiters_webhook=1', 'top');
+        add_rewrite_tag('%smartrecruiters_webhook%', '([^&]+)');
+    }
+
+    /**
+     * Handle webhook requests
+     */
+    public function handle_webhook_request()
+    {
+        if (!get_query_var('smartrecruiters_webhook')) {
+            return;
+        }
+
+        // Only allow POST requests
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            exit('Method not allowed');
+        }
+
+        $options = get_option('smartrecruiters_job_sync_options');
+        
+        // Check if webhooks are enabled
+        if (empty($options['webhook_enabled'])) {
+            http_response_code(403);
+            exit('Webhooks disabled');
+        }
+
+        // Get raw POST data
+        $raw_data = file_get_contents('php://input');
+        $webhook_data = json_decode($raw_data, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            http_response_code(400);
+            exit('Invalid JSON');
+        }
+
+        // Verify webhook signature if secret is set
+        if (!empty($options['webhook_secret'])) {
+            $signature = $_SERVER['HTTP_X_SMARTRECRUITERS_SIGNATURE'] ?? '';
+            if (!$this->verify_webhook_signature($raw_data, $signature, $options['webhook_secret'])) {
+                http_response_code(401);
+                exit('Invalid signature');
+            }
+        }
+
+        // Process webhook data
+        $this->process_webhook_data($webhook_data);
+
+        http_response_code(200);
+        exit('OK');
+    }
+
+    /**
+     * Verify webhook signature
+     */
+    private function verify_webhook_signature($payload, $signature, $secret)
+    {
+        $expected_signature = 'sha256=' . hash_hmac('sha256', $payload, $secret);
+        return hash_equals($expected_signature, $signature);
+    }
+
+    /**
+     * Process webhook data and update database
+     */
+    private function process_webhook_data($webhook_data)
+    {
+        $event_type = $webhook_data['eventType'] ?? '';
+        $job_data = $webhook_data['data'] ?? array();
+
+        error_log('SmartRecruiters Webhook: Received ' . $event_type . ' event');
+
+        switch ($event_type) {
+            case 'job.created':
+            case 'job.updated':
+                $this->sync_single_job($job_data);
+                break;
+            case 'job.deleted':
+                $this->delete_job_by_external_id($job_data['id'] ?? '');
+                break;
+            default:
+                error_log('SmartRecruiters Webhook: Unknown event type ' . $event_type);
+        }
+    }
+
+    /**
+     * Sync a single job from webhook data
+     */
+    private function sync_single_job($job_data)
+    {
+        if (empty($job_data['id'])) {
+            return;
+        }
+
+        // Check if job already exists
+        $existing_post = $this->find_job_by_external_id($job_data['id']);
+        
+        if ($existing_post) {
+            // Update existing job
+            $this->update_job_post($existing_post->ID, $job_data);
+            error_log('SmartRecruiters Webhook: Updated job ' . $job_data['id']);
+        } else {
+            // Create new job
+            $this->create_job_from_webhook($job_data);
+            error_log('SmartRecruiters Webhook: Created job ' . $job_data['id']);
+        }
+    }
+
+    /**
+     * Find job post by external ID
+     */
+    private function find_job_by_external_id($external_id)
+    {
+        global $wpdb;
+        $post_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_job_external_id' AND meta_value = %s",
+            $external_id
+        ));
+        
+        return $post_id ? get_post($post_id) : null;
+    }
+
+    /**
+     * Delete job by external ID
+     */
+    private function delete_job_by_external_id($external_id)
+    {
+        $post = $this->find_job_by_external_id($external_id);
+        if ($post) {
+            wp_delete_post($post->ID, true);
+            error_log('SmartRecruiters Webhook: Deleted job ' . $external_id);
+        }
+    }
+
+    /**
+     * Create job from webhook data
+     */
+    private function create_job_from_webhook($job_data)
+    {
+        $api_sync = new SmartRecruitersAPISync();
+        $api_sync->create_job($job_data);
+    }
+
+    /**
+     * Update existing job post
+     */
+    private function update_job_post($post_id, $job_data)
+    {
+        $api_sync = new SmartRecruitersAPISync();
+        $api_sync->update_job($post_id, $job_data);
+    }
+
+    /**
      * Manual sync AJAX handler
      */
     public function manual_sync_ajax()
@@ -718,6 +1006,205 @@ class SmartRecruitersJobSyncPlugin
         } else {
             wp_send_json_error(array('message' => $result['message'], 'logs' => ($result['logs'] ?? array())));
         }
+    }
+
+    /**
+     * Create webhook subscription AJAX handler
+     */
+    public function create_webhook_ajax()
+    {
+        check_ajax_referer('webhook_management_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+
+        $result = $this->create_webhook_subscription();
+        
+        if ($result['success']) {
+            wp_send_json_success($result);
+        } else {
+            wp_send_json_error($result);
+        }
+    }
+
+    /**
+     * Delete webhook subscription AJAX handler
+     */
+    public function delete_webhook_ajax()
+    {
+        check_ajax_referer('webhook_management_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+
+        $result = $this->delete_webhook_subscription();
+        
+        if ($result['success']) {
+            wp_send_json_success($result);
+        } else {
+            wp_send_json_error($result);
+        }
+    }
+
+    /**
+     * Create webhook subscription in SmartRecruiters
+     */
+    private function create_webhook_subscription()
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        
+        if (empty($options['api_url']) || empty($options['client_id']) || empty($options['client_secret'])) {
+            return array(
+                'success' => false,
+                'message' => 'API configuration incomplete'
+            );
+        }
+
+        // Get access token
+        $access_token = $this->get_access_token();
+        if (!$access_token) {
+            return array(
+                'success' => false,
+                'message' => 'Failed to obtain access token'
+            );
+        }
+
+        $webhook_url = home_url('/smartrecruiters-webhook/');
+        
+        $webhook_data = array(
+            'callbackUrl' => $webhook_url,
+            'events' => array('job.created', 'job.updated', 'job.deleted'),
+            'active' => true
+        );
+
+        $response = wp_remote_post($options['api_url'] . '/webhooks', array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type' => 'application/json'
+            ),
+            'body' => json_encode($webhook_data),
+            'timeout' => 30
+        ));
+
+        if (is_wp_error($response)) {
+            return array(
+                'success' => false,
+                'message' => 'Request failed: ' . $response->get_error_message()
+            );
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+
+        if ($response_code === 201) {
+            $webhook_info = json_decode($response_body, true);
+            update_option('smartrecruiters_webhook_id', $webhook_info['id'] ?? '');
+            
+            return array(
+                'success' => true,
+                'message' => 'Webhook subscription created successfully'
+            );
+        } else {
+            return array(
+                'success' => false,
+                'message' => 'Failed to create webhook: ' . $response_body
+            );
+        }
+    }
+
+    /**
+     * Delete webhook subscription from SmartRecruiters
+     */
+    private function delete_webhook_subscription()
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $webhook_id = get_option('smartrecruiters_webhook_id');
+        
+        if (empty($webhook_id)) {
+            return array(
+                'success' => false,
+                'message' => 'No webhook subscription found'
+            );
+        }
+
+        // Get access token
+        $access_token = $this->get_access_token();
+        if (!$access_token) {
+            return array(
+                'success' => false,
+                'message' => 'Failed to obtain access token'
+            );
+        }
+
+        $response = wp_remote_request($options['api_url'] . '/webhooks/' . $webhook_id, array(
+            'method' => 'DELETE',
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $access_token
+            ),
+            'timeout' => 30
+        ));
+
+        if (is_wp_error($response)) {
+            return array(
+                'success' => false,
+                'message' => 'Request failed: ' . $response->get_error_message()
+            );
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+
+        if ($response_code === 204 || $response_code === 200) {
+            delete_option('smartrecruiters_webhook_id');
+            
+            return array(
+                'success' => true,
+                'message' => 'Webhook subscription deleted successfully'
+            );
+        } else {
+            return array(
+                'success' => false,
+                'message' => 'Failed to delete webhook'
+            );
+        }
+    }
+
+    /**
+     * Get access token for API calls
+     */
+    private function get_access_token()
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $token_url = $options['api_url'] . '/identity/oauth/token';
+
+        $data = array(
+            'grant_type' => 'client_credentials',
+            'client_id' => $options['client_id'],
+            'client_secret' => $options['client_secret']
+        );
+
+        $response = wp_remote_post($token_url, array(
+            'body' => $data,
+            'timeout' => 30,
+            'headers' => array(
+                'Content-Type' => 'application/x-www-form-urlencoded'
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            return false;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        if ($response_code !== 200) {
+            return false;
+        }
+
+        $response_body = wp_remote_retrieve_body($response);
+        $token_data = json_decode($response_body, true);
+
+        return $token_data['access_token'] ?? false;
     }
 
     /**
@@ -1105,6 +1592,92 @@ class SmartRecruitersAPISync
         );
 
         return wp_insert_post($post_data);
+    }
+
+    /**
+     * Update existing job post
+     */
+    public function update_job($post_id, $job_data)
+    {
+        $title = $job_data['title'] ?? 'Untitled Job';
+        $description = $this->format_job_description($job_data);
+
+        // Extract jobAd sections if present for dedicated storage
+        $jobAdSections = $job_data['jobAd']['sections'] ?? array();
+        $companyDescription = $jobAdSections['companyDescription'] ?? array();
+        $jobDescriptionSection = $jobAdSections['jobDescription'] ?? array();
+        $qualifications = $jobAdSections['qualifications'] ?? array();
+        $additionalInformation = $jobAdSections['additionalInformation'] ?? array();
+        $videosUrls = $jobAdSections['videos']['urls'] ?? array();
+
+        $post_data = array(
+            'ID' => $post_id,
+            'post_title' => $title,
+            'post_content' => $description,
+            'meta_input' => array(
+                // Basic job info
+                '_job_title' => $job_data['title'] ?? '',
+                '_job_ref_number' => $job_data['refNumber'] ?? '',
+                '_job_status' => $job_data['status'] ?? '',
+                '_job_posting_status' => $job_data['postingStatus'] ?? '',
+                '_job_external_id' => $job_data['id'] ?? '',
+                
+                // Department and language
+                '_job_department' => $job_data['department']['label'] ?? '',
+                '_job_language' => $job_data['language']['label'] ?? '',
+                
+                // Experience level (label + full object JSON)
+                '_job_experience_level' => is_array($job_data['experienceLevel'] ?? null) ? ($job_data['experienceLevel']['label'] ?? '') : ($job_data['experienceLevel'] ?? ''),
+                '_job_experience_level_full' => json_encode($job_data['experienceLevel'] ?? array()),
+                
+                // Full location object (JSON)
+                '_job_location_full' => json_encode($job_data['location'] ?? array()),
+                '_job_location' => $this->format_location($job_data['location'] ?? array()),
+                '_job_country_code' => $job_data['location']['countryCode'] ?? '',
+                '_job_city' => $job_data['location']['city'] ?? '',
+                '_job_region_code' => $job_data['location']['regionCode'] ?? '',
+                '_job_remote' => !empty($job_data['location']['remote']) ? 'REMOTE' : 'ONSITE',
+                
+                // Full actions object (JSON)
+                '_job_actions_full' => json_encode($job_data['actions'] ?? array()),
+                '_job_api_url' => $job_data['actions']['details']['url'] ?? '',
+                
+                // Job Ad sections (full object) - check multiple possible field names
+                '_job_ad_full' => json_encode($job_data['jobAd'] ?? $job_data['jobAdSections'] ?? $job_data['ad'] ?? array()),
+                
+                // Job Ad sections (dedicated fields for details page)
+                '_job_ad_company_description_title' => $companyDescription['title'] ?? '',
+                '_job_ad_company_description_text' => $companyDescription['text'] ?? '',
+                '_job_ad_job_description_title' => $jobDescriptionSection['title'] ?? '',
+                '_job_ad_job_description_text' => $jobDescriptionSection['text'] ?? '',
+                '_job_ad_qualifications_title' => $qualifications['title'] ?? '',
+                '_job_ad_qualifications_text' => $qualifications['text'] ?? '',
+                '_job_ad_additional_information_title' => $additionalInformation['title'] ?? '',
+                '_job_ad_additional_information_text' => $additionalInformation['text'] ?? '',
+                '_job_ad_videos_urls' => json_encode($videosUrls),
+                
+                // Original jobs list summary object
+                '_job_summary_full' => json_encode($job_data['__summary'] ?? array()),
+                
+                // Properties (full object + Partners extraction)
+                '_job_properties_full' => json_encode($job_data['properties'] ?? array()),
+                '_job_partners_name' => $this->extract_partners_name($job_data['properties'] ?? array()),
+                
+                // Dates
+                '_job_created_on' => $job_data['createdOn'] ?? '',
+                '_job_updated_on' => $job_data['updatedOn'] ?? '',
+                '_job_last_activity' => $job_data['lastActivityOn'] ?? '',
+                
+                // Apply URL
+                '_job_apply_url' => !empty($job_data['refNumber']) ? ('https://jobs.smartrecruiters.com/' . $job_data['refNumber']) : '',
+                
+                // Sync info
+                '_job_last_synced' => time(),
+                '_job_sync_status' => 'synced'
+            )
+        );
+
+        return wp_update_post($post_data);
     }
 
     private function format_job_description($job_data)
