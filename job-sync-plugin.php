@@ -617,7 +617,7 @@ class SmartRecruitersJobSyncPlugin
         error_log('SmartRecruiters: Client ID: ' . $options['client_id']);
         error_log('SmartRecruiters: Client Secret: ' . (empty($options['client_secret']) ? 'EMPTY' : 'SET'));
 
-        $api_sync = new SmartRecruitersAPISyncV2();
+        $api_sync = new SmartRecruitersAPISync();
         return $api_sync->sync_jobs();
     }
 
@@ -646,10 +646,10 @@ class SmartRecruitersJobSyncPlugin
 
 
 /**
- * SmartRecruiters API Sync Class - Version 2
+ * SmartRecruiters API Sync Class
  * Fetches list of jobs, then fetches each job's details and stores them
  */
-class SmartRecruitersAPISyncV2
+class SmartRecruitersAPISync
 {
 
     private $options;
@@ -703,15 +703,15 @@ class SmartRecruitersAPISyncV2
 
             return array(
                 'success' => true,
-                'message' => sprintf('SmartRecruiters v2 sync completed: %d jobs refreshed with details', $added),
+                'message' => sprintf('SmartRecruiters sync completed: %d jobs refreshed with details', $added),
                 'logs' => $this->logs
             );
 
         } catch (Exception $e) {
-            error_log('SmartRecruiters Job Sync V2 Error: ' . $e->getMessage());
+            error_log('SmartRecruiters Job Sync Error: ' . $e->getMessage());
             return array(
                 'success' => false,
-                'message' => 'SmartRecruiters v2 sync failed: ' . $e->getMessage(),
+                'message' => 'SmartRecruiters sync failed: ' . $e->getMessage(),
                 'logs' => $this->logs
             );
         }
