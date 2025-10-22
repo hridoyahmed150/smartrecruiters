@@ -44,11 +44,11 @@ class SmartRecruitersJobSyncPlugin
 
         // AJAX hooks for manual sync
         add_action('wp_ajax_manual_smartrecruiters_sync', array($this, 'manual_sync_ajax'));
-        
+
         // AJAX hooks for webhook management
         add_action('wp_ajax_create_smartrecruiters_webhook', array($this, 'create_webhook_ajax'));
         add_action('wp_ajax_delete_smartrecruiters_webhook', array($this, 'delete_webhook_ajax'));
-        
+
         // Webhook endpoint for real-time job updates
         add_action('init', array($this, 'add_webhook_endpoint'));
         add_action('template_redirect', array($this, 'handle_webhook_request'));
@@ -427,11 +427,15 @@ class SmartRecruitersJobSyncPlugin
             <button type="button" id="delete-webhook-btn" class="button button-secondary">Delete Webhook Subscription</button>
             <div id="webhook-status" style="margin-top: 10px;"></div>
 
+            <?php
+            $opts = get_option('smartrecruiters_job_sync_options');
+            $webhooks_active = !empty($opts['webhook_enabled']) && !empty($opts['disable_cron_when_webhook_active']);
+            
+            if (!$webhooks_active): ?>
             <hr>
             <h2>Next Scheduled Runs</h2>
             <div id="next-runs">
                 <?php
-                $opts = get_option('smartrecruiters_job_sync_options');
                 $runs = isset($opts['runs_per_day_count']) && intval($opts['runs_per_day_count']) === 2 ? 2 : 1;
                 $time1 = isset($opts['run_time_1']) ? $opts['run_time_1'] : '01:00';
                 $time2 = isset($opts['run_time_2']) ? $opts['run_time_2'] : '13:00';
@@ -443,6 +447,14 @@ class SmartRecruitersJobSyncPlugin
                 }
                 ?>
             </div>
+            <?php else: ?>
+            <hr>
+            <h2>Sync Status</h2>
+            <div id="sync-status-info">
+                <p><strong>Real-time sync active via webhooks</strong></p>
+                <p>Cron jobs are disabled because webhooks are providing instant updates.</p>
+            </div>
+            <?php endif; ?>
 
             <hr>
             <h2>Last Run</h2>
@@ -557,31 +569,55 @@ class SmartRecruitersJobSyncPlugin
                         });
                 });
 
-                    // fetch(ajaxurl, {
-                    //     method: 'POST',
-                    //     headers: {
-                    //         'Content-Type': 'application/x-www-form-urlencoded',
-                    //     },
-                    //     body: 'action=manual_smartrecruiters_sync&nonce=' + '<?php //echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
-                    // })
-                    //     .then(response => response.json())
-                    //     .then(data => {
-                    //         // wnat to show the message in a console.log
-                    //         console.log(data);
-                    //         if (data.success) {
-                    //             status.innerHTML = '<p style="color: green;">' + data.data.message + '</p>';
-                    //         } else {
-                    //             status.innerHTML = '<p style="color: red;">Error: ' + data.data + '</p>';
-                    //         }
-                    //     })
-                    //     .catch(error => {
-                    //         status.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
-                    //     })
-                    //     .finally(() => {
-                    //         btn.disabled = false;
-                    //         btn.textContent = 'Sync Jobs Now';
-                    //     });
-                });
+                                    // fetch(ajaxurl, {
+                                    //     method: 'POST',
+                                    //     headers: {
+                                    //         'Content-Type': 'application/x-www-form-urlencoded',
+                                    //     },
+                                    //     body: 'action=manual_smartrecruiters_sync&nonce=' + '<?php //echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
+                                    // })
+                                    //     .then(response => response.json())
+                                    //     .then(data => {
+                                    //         // wnat to show the message in a console.log
+                                    //         console.log(data);
+                                    //         if (data.success) {
+                                    //             status.innerHTML = '<p style="color: green;">' + data.data.message + '</p>';
+                                    //         } else {
+                                    //             status.innerHTML = '<p style="color: red;">Error: ' + data.data + '</p>';
+                                    //         }
+                                    //     })
+                                    //     .catch(error => {
+                                    //         status.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+                                    //     })
+                                    //     .finally(() => {
+                                    //         btn.disabled = false;
+                                    //         btn.textContent = 'Sync Jobs Now';
+                                    //     });
+                                });
+
+                // Show/hide cron settings based on webhook status
+                function toggleCronSettings() {
+                    var webhookEnabled = document.querySelector('input[name="smartrecruiters_job_sync_options[webhook_enabled]"]').checked;
+                    var disableCron = document.querySelector('input[name="smartrecruiters_job_sync_options[disable_cron_when_webhook_active]"]').checked;
+                    var cronFields = document.querySelectorAll('tr:has(input[name*="runs_per_day_count"]), tr:has(input[name*="run_time_1"]), tr:has(input[name*="run_time_2"])');
+                    
+                    if (webhookEnabled && disableCron) {
+                        cronFields.forEach(function(field) {
+                            field.style.display = 'none';
+                        });
+                    } else {
+                        cronFields.forEach(function(field) {
+                            field.style.display = '';
+                        });
+                    }
+                }
+
+                // Initial toggle
+                toggleCronSettings();
+
+                // Toggle on change
+                document.querySelector('input[name="smartrecruiters_job_sync_options[webhook_enabled]"]').addEventListener('change', toggleCronSettings);
+                document.querySelector('input[name="smartrecruiters_job_sync_options[disable_cron_when_webhook_active]"]').addEventListener('change', toggleCronSettings);
             </script>
         </div>
         <?php
@@ -670,6 +706,14 @@ class SmartRecruitersJobSyncPlugin
             'webhook_secret',
             'Webhook Secret',
             array($this, 'webhook_secret_callback'),
+            'smartrecruiters_job_sync_settings',
+            'smartrecruiters_webhook_section'
+        );
+
+        add_settings_field(
+            'disable_cron_when_webhook_active',
+            'Disable Cron When Webhook Active',
+            array($this, 'disable_cron_when_webhook_active_callback'),
             'smartrecruiters_job_sync_settings',
             'smartrecruiters_webhook_section'
         );
@@ -781,6 +825,17 @@ class SmartRecruitersJobSyncPlugin
         echo '<p class="description">Secret key for webhook verification (optional but recommended for security)</p>';
     }
 
+    /**
+     * Disable cron when webhook active callback
+     */
+    public function disable_cron_when_webhook_active_callback()
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $value = isset($options['disable_cron_when_webhook_active']) ? $options['disable_cron_when_webhook_active'] : '1';
+        echo '<input type="checkbox" name="smartrecruiters_job_sync_options[disable_cron_when_webhook_active]" value="1"' . checked($value, '1', false) . ' />';
+        echo '<p class="description">Automatically disable cron jobs when webhooks are active (recommended for real-time sync)</p>';
+    }
+
 
 
     /**
@@ -789,6 +844,15 @@ class SmartRecruitersJobSyncPlugin
     public function schedule_cron()
     {
         $options = get_option('smartrecruiters_job_sync_options');
+        
+        // Check if webhooks are active and cron should be disabled
+        if (!empty($options['webhook_enabled']) && !empty($options['disable_cron_when_webhook_active'])) {
+            // Clear any existing cron jobs when webhooks are active
+            wp_clear_scheduled_hook('smartrecruiters_job_sync_cron', array('slot' => 1));
+            wp_clear_scheduled_hook('smartrecruiters_job_sync_cron', array('slot' => 2));
+            return;
+        }
+        
         $runs = isset($options['runs_per_day_count']) && intval($options['runs_per_day_count']) === 2 ? 2 : 1;
         $time1 = isset($options['run_time_1']) ? $options['run_time_1'] : '01:00';
         $time2 = isset($options['run_time_2']) ? $options['run_time_2'] : '13:00';
@@ -857,7 +921,7 @@ class SmartRecruitersJobSyncPlugin
         }
 
         $options = get_option('smartrecruiters_job_sync_options');
-        
+
         // Check if webhooks are enabled
         if (empty($options['webhook_enabled'])) {
             http_response_code(403);
@@ -932,7 +996,7 @@ class SmartRecruitersJobSyncPlugin
 
         // Check if job already exists
         $existing_post = $this->find_job_by_external_id($job_data['id']);
-        
+
         if ($existing_post) {
             // Update existing job
             $this->update_job_post($existing_post->ID, $job_data);
@@ -954,7 +1018,7 @@ class SmartRecruitersJobSyncPlugin
             "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_job_external_id' AND meta_value = %s",
             $external_id
         ));
-        
+
         return $post_id ? get_post($post_id) : null;
     }
 
@@ -1020,7 +1084,7 @@ class SmartRecruitersJobSyncPlugin
         }
 
         $result = $this->create_webhook_subscription();
-        
+
         if ($result['success']) {
             wp_send_json_success($result);
         } else {
@@ -1040,7 +1104,7 @@ class SmartRecruitersJobSyncPlugin
         }
 
         $result = $this->delete_webhook_subscription();
-        
+
         if ($result['success']) {
             wp_send_json_success($result);
         } else {
@@ -1054,7 +1118,7 @@ class SmartRecruitersJobSyncPlugin
     private function create_webhook_subscription()
     {
         $options = get_option('smartrecruiters_job_sync_options');
-        
+
         if (empty($options['api_url']) || empty($options['client_id']) || empty($options['client_secret'])) {
             return array(
                 'success' => false,
@@ -1072,7 +1136,7 @@ class SmartRecruitersJobSyncPlugin
         }
 
         $webhook_url = home_url('/smartrecruiters-webhook/');
-        
+
         $webhook_data = array(
             'callbackUrl' => $webhook_url,
             'events' => array('job.created', 'job.updated', 'job.deleted'),
@@ -1101,7 +1165,7 @@ class SmartRecruitersJobSyncPlugin
         if ($response_code === 201) {
             $webhook_info = json_decode($response_body, true);
             update_option('smartrecruiters_webhook_id', $webhook_info['id'] ?? '');
-            
+
             return array(
                 'success' => true,
                 'message' => 'Webhook subscription created successfully'
@@ -1121,7 +1185,7 @@ class SmartRecruitersJobSyncPlugin
     {
         $options = get_option('smartrecruiters_job_sync_options');
         $webhook_id = get_option('smartrecruiters_webhook_id');
-        
+
         if (empty($webhook_id)) {
             return array(
                 'success' => false,
@@ -1157,7 +1221,7 @@ class SmartRecruitersJobSyncPlugin
 
         if ($response_code === 204 || $response_code === 200) {
             delete_option('smartrecruiters_webhook_id');
-            
+
             return array(
                 'success' => true,
                 'message' => 'Webhook subscription deleted successfully'
@@ -1621,15 +1685,15 @@ class SmartRecruitersAPISync
                 '_job_status' => $job_data['status'] ?? '',
                 '_job_posting_status' => $job_data['postingStatus'] ?? '',
                 '_job_external_id' => $job_data['id'] ?? '',
-                
+
                 // Department and language
                 '_job_department' => $job_data['department']['label'] ?? '',
                 '_job_language' => $job_data['language']['label'] ?? '',
-                
+
                 // Experience level (label + full object JSON)
                 '_job_experience_level' => is_array($job_data['experienceLevel'] ?? null) ? ($job_data['experienceLevel']['label'] ?? '') : ($job_data['experienceLevel'] ?? ''),
                 '_job_experience_level_full' => json_encode($job_data['experienceLevel'] ?? array()),
-                
+
                 // Full location object (JSON)
                 '_job_location_full' => json_encode($job_data['location'] ?? array()),
                 '_job_location' => $this->format_location($job_data['location'] ?? array()),
@@ -1637,14 +1701,14 @@ class SmartRecruitersAPISync
                 '_job_city' => $job_data['location']['city'] ?? '',
                 '_job_region_code' => $job_data['location']['regionCode'] ?? '',
                 '_job_remote' => !empty($job_data['location']['remote']) ? 'REMOTE' : 'ONSITE',
-                
+
                 // Full actions object (JSON)
                 '_job_actions_full' => json_encode($job_data['actions'] ?? array()),
                 '_job_api_url' => $job_data['actions']['details']['url'] ?? '',
-                
+
                 // Job Ad sections (full object) - check multiple possible field names
                 '_job_ad_full' => json_encode($job_data['jobAd'] ?? $job_data['jobAdSections'] ?? $job_data['ad'] ?? array()),
-                
+
                 // Job Ad sections (dedicated fields for details page)
                 '_job_ad_company_description_title' => $companyDescription['title'] ?? '',
                 '_job_ad_company_description_text' => $companyDescription['text'] ?? '',
@@ -1655,22 +1719,22 @@ class SmartRecruitersAPISync
                 '_job_ad_additional_information_title' => $additionalInformation['title'] ?? '',
                 '_job_ad_additional_information_text' => $additionalInformation['text'] ?? '',
                 '_job_ad_videos_urls' => json_encode($videosUrls),
-                
+
                 // Original jobs list summary object
                 '_job_summary_full' => json_encode($job_data['__summary'] ?? array()),
-                
+
                 // Properties (full object + Partners extraction)
                 '_job_properties_full' => json_encode($job_data['properties'] ?? array()),
                 '_job_partners_name' => $this->extract_partners_name($job_data['properties'] ?? array()),
-                
+
                 // Dates
                 '_job_created_on' => $job_data['createdOn'] ?? '',
                 '_job_updated_on' => $job_data['updatedOn'] ?? '',
                 '_job_last_activity' => $job_data['lastActivityOn'] ?? '',
-                
+
                 // Apply URL
                 '_job_apply_url' => !empty($job_data['refNumber']) ? ('https://jobs.smartrecruiters.com/' . $job_data['refNumber']) : '',
-                
+
                 // Sync info
                 '_job_last_synced' => time(),
                 '_job_sync_status' => 'synced'
