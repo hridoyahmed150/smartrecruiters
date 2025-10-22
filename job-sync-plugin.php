@@ -161,6 +161,15 @@ class SmartRecruitersJobSyncPlugin
         $location_full = get_post_meta($post->ID, '_job_location_full', true);
         $actions_full = get_post_meta($post->ID, '_job_actions_full', true);
         $job_ad_full = get_post_meta($post->ID, '_job_ad_full', true);
+        $job_ad_company_description_title = get_post_meta($post->ID, '_job_ad_company_description_title', true);
+        $job_ad_company_description_text = get_post_meta($post->ID, '_job_ad_company_description_text', true);
+        $job_ad_job_description_title = get_post_meta($post->ID, '_job_ad_job_description_title', true);
+        $job_ad_job_description_text = get_post_meta($post->ID, '_job_ad_job_description_text', true);
+        $job_ad_qualifications_title = get_post_meta($post->ID, '_job_ad_qualifications_title', true);
+        $job_ad_qualifications_text = get_post_meta($post->ID, '_job_ad_qualifications_text', true);
+        $job_ad_additional_information_title = get_post_meta($post->ID, '_job_ad_additional_information_title', true);
+        $job_ad_additional_information_text = get_post_meta($post->ID, '_job_ad_additional_information_text', true);
+        $job_ad_videos_urls = get_post_meta($post->ID, '_job_ad_videos_urls', true);
 
         ?>
         <table class="form-table">
@@ -248,6 +257,47 @@ class SmartRecruitersJobSyncPlugin
                 <th><label for="job_ad_full">Job Ad (Full Object)</label></th>
                 <td><textarea id="job_ad_full" name="job_ad_full" style="width: 100%; height: 150px;"
                         readonly><?php echo esc_textarea($job_ad_full); ?></textarea></td>
+            </tr>
+            <tr>
+                <th><label>Company Description</label></th>
+                <td>
+                    <input type="text" value="<?php echo esc_attr($job_ad_company_description_title); ?>" style="width: 100%;"
+                        readonly />
+                    <textarea style="width: 100%; height: 120px;"
+                        readonly><?php echo esc_textarea($job_ad_company_description_text); ?></textarea>
+                </td>
+            </tr>
+            <tr>
+                <th><label>Job Description</label></th>
+                <td>
+                    <input type="text" value="<?php echo esc_attr($job_ad_job_description_title); ?>" style="width: 100%;"
+                        readonly />
+                    <textarea style="width: 100%; height: 120px;"
+                        readonly><?php echo esc_textarea($job_ad_job_description_text); ?></textarea>
+                </td>
+            </tr>
+            <tr>
+                <th><label>Qualifications</label></th>
+                <td>
+                    <input type="text" value="<?php echo esc_attr($job_ad_qualifications_title); ?>" style="width: 100%;"
+                        readonly />
+                    <textarea style="width: 100%; height: 120px;"
+                        readonly><?php echo esc_textarea($job_ad_qualifications_text); ?></textarea>
+                </td>
+            </tr>
+            <tr>
+                <th><label>Additional Information</label></th>
+                <td>
+                    <input type="text" value="<?php echo esc_attr($job_ad_additional_information_title); ?>"
+                        style="width: 100%;" readonly />
+                    <textarea style="width: 100%; height: 120px;"
+                        readonly><?php echo esc_textarea($job_ad_additional_information_text); ?></textarea>
+                </td>
+            </tr>
+            <tr>
+                <th><label>Videos (URLs)</label></th>
+                <td><textarea style="width: 100%; height: 80px;"
+                        readonly><?php echo esc_textarea($job_ad_videos_urls); ?></textarea></td>
             </tr>
         </table>
         <?php
@@ -814,6 +864,14 @@ class SmartRecruitersAPISyncV2
         $title = $job_data['title'] ?? 'Untitled Job';
         $description = $this->format_job_description($job_data);
 
+        // Extract jobAd sections if present for dedicated storage
+        $jobAdSections = $job_data['jobAd']['sections'] ?? array();
+        $companyDescription = $jobAdSections['companyDescription'] ?? array();
+        $jobDescriptionSection = $jobAdSections['jobDescription'] ?? array();
+        $qualifications = $jobAdSections['qualifications'] ?? array();
+        $additionalInformation = $jobAdSections['additionalInformation'] ?? array();
+        $videosUrls = $jobAdSections['videos']['urls'] ?? array();
+
         $post_data = array(
             'post_title' => $title,
             'post_content' => $description,
@@ -849,6 +907,17 @@ class SmartRecruitersAPISyncV2
 
                 // Job Ad sections (full object) - check multiple possible field names
                 '_job_ad_full' => json_encode($job_data['jobAd'] ?? $job_data['jobAdSections'] ?? $job_data['ad'] ?? array()),
+
+                // Job Ad sections (dedicated fields for details page)
+                '_job_ad_company_description_title' => $companyDescription['title'] ?? '',
+                '_job_ad_company_description_text' => $companyDescription['text'] ?? '',
+                '_job_ad_job_description_title' => $jobDescriptionSection['title'] ?? '',
+                '_job_ad_job_description_text' => $jobDescriptionSection['text'] ?? '',
+                '_job_ad_qualifications_title' => $qualifications['title'] ?? '',
+                '_job_ad_qualifications_text' => $qualifications['text'] ?? '',
+                '_job_ad_additional_information_title' => $additionalInformation['title'] ?? '',
+                '_job_ad_additional_information_text' => $additionalInformation['text'] ?? '',
+                '_job_ad_videos_urls' => json_encode($videosUrls),
 
                 // Original jobs list summary object
                 '_job_summary_full' => json_encode($job_data['__summary'] ?? array()),
