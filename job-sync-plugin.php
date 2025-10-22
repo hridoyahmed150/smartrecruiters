@@ -38,9 +38,6 @@ class SmartRecruitersJobSyncPlugin
         // Cron hooks
         add_action('smartrecruiters_job_sync_cron', array($this, 'sync_jobs'), 10, 1);
 
-        // Add custom cron interval
-        add_filter('cron_schedules', array($this, 'add_custom_cron_interval'));
-        add_action('update_option_smartrecruiters_job_sync_options', array($this, 'reschedule_cron_on_settings_change'), 10, 2);
 
         // AJAX hooks for manual sync
         add_action('wp_ajax_manual_smartrecruiters_sync', array($this, 'manual_sync_ajax'));
@@ -61,17 +58,8 @@ class SmartRecruitersJobSyncPlugin
     {
         $this->register_job_post_type();
         $this->add_custom_fields();
-        $this->schedule_cron();
     }
 
-    /**
-     * Add custom cron interval based on settings (minutes)
-     */
-    public function add_custom_cron_interval($schedules)
-    {
-        // No custom intervals needed - using WordPress default 'daily'
-        return $schedules;
-    }
 
     /**
      * Register custom post type for jobs
@@ -427,34 +415,21 @@ class SmartRecruitersJobSyncPlugin
             <button type="button" id="delete-webhook-btn" class="button button-secondary">Delete Webhook Subscription</button>
             <div id="webhook-status" style="margin-top: 10px;"></div>
 
-            <?php
-            $opts = get_option('smartrecruiters_job_sync_options');
-            $webhooks_active = !empty($opts['webhook_enabled']) && !empty($opts['disable_cron_when_webhook_active']);
-            
-            if (!$webhooks_active): ?>
-            <hr>
-            <h2>Next Scheduled Runs</h2>
-            <div id="next-runs">
-                <?php
-                $runs = isset($opts['runs_per_day_count']) && intval($opts['runs_per_day_count']) === 2 ? 2 : 1;
-                $time1 = isset($opts['run_time_1']) ? $opts['run_time_1'] : '01:00';
-                $time2 = isset($opts['run_time_2']) ? $opts['run_time_2'] : '13:00';
-                $next1 = wp_next_scheduled('smartrecruiters_job_sync_cron', array('slot' => 1));
-                $next2 = wp_next_scheduled('smartrecruiters_job_sync_cron', array('slot' => 2));
-                echo '<p>Run #1 (' . esc_html($time1) . '): ' . ($next1 ? date('Y-m-d H:i:s', $next1) : 'not scheduled') . '</p>';
-                if ($runs === 2) {
-                    echo '<p>Run #2 (' . esc_html($time2) . '): ' . ($next2 ? date('Y-m-d H:i:s', $next2) : 'not scheduled') . '</p>';
-                }
-                ?>
-            </div>
-            <?php else: ?>
             <hr>
             <h2>Sync Status</h2>
             <div id="sync-status-info">
-                <p><strong>Real-time sync active via webhooks</strong></p>
-                <p>Cron jobs are disabled because webhooks are providing instant updates.</p>
+                <?php
+                $opts = get_option('smartrecruiters_job_sync_options');
+                $webhooks_active = !empty($opts['webhook_enabled']);
+                
+                if ($webhooks_active): ?>
+                    <p><strong>Real-time sync active via webhooks</strong></p>
+                    <p>Jobs will update instantly when changed in SmartRecruiters.</p>
+                <?php else: ?>
+                    <p><strong>Manual sync only</strong></p>
+                    <p>Use the "Sync Jobs Now" button above to update jobs manually.</p>
+                <?php endif; ?>
             </div>
-            <?php endif; ?>
 
             <hr>
             <h2>Last Run</h2>
@@ -569,55 +544,32 @@ class SmartRecruitersJobSyncPlugin
                         });
                 });
 
-                                    // fetch(ajaxurl, {
-                                    //     method: 'POST',
-                                    //     headers: {
-                                    //         'Content-Type': 'application/x-www-form-urlencoded',
-                                    //     },
-                                    //     body: 'action=manual_smartrecruiters_sync&nonce=' + '<?php //echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
-                                    // })
-                                    //     .then(response => response.json())
-                                    //     .then(data => {
-                                    //         // wnat to show the message in a console.log
-                                    //         console.log(data);
-                                    //         if (data.success) {
-                                    //             status.innerHTML = '<p style="color: green;">' + data.data.message + '</p>';
-                                    //         } else {
-                                    //             status.innerHTML = '<p style="color: red;">Error: ' + data.data + '</p>';
-                                    //         }
-                                    //     })
-                                    //     .catch(error => {
-                                    //         status.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
-                                    //     })
-                                    //     .finally(() => {
-                                    //         btn.disabled = false;
-                                    //         btn.textContent = 'Sync Jobs Now';
-                                    //     });
-                                });
+                                                    // fetch(ajaxurl, {
+                                                    //     method: 'POST',
+                                                    //     headers: {
+                                                    //         'Content-Type': 'application/x-www-form-urlencoded',
+                                                    //     },
+                                                    //     body: 'action=manual_smartrecruiters_sync&nonce=' + '<?php //echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
+                                                    // })
+                                                    //     .then(response => response.json())
+                                                    //     .then(data => {
+                                                    //         // wnat to show the message in a console.log
+                                                    //         console.log(data);
+                                                    //         if (data.success) {
+                                                    //             status.innerHTML = '<p style="color: green;">' + data.data.message + '</p>';
+                                                    //         } else {
+                                                    //             status.innerHTML = '<p style="color: red;">Error: ' + data.data + '</p>';
+                                                    //         }
+                                                    //     })
+                                                    //     .catch(error => {
+                                                    //         status.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+                                                    //     })
+                                                    //     .finally(() => {
+                                                    //         btn.disabled = false;
+                                                    //         btn.textContent = 'Sync Jobs Now';
+                                                    //     });
+                                                });
 
-                // Show/hide cron settings based on webhook status
-                function toggleCronSettings() {
-                    var webhookEnabled = document.querySelector('input[name="smartrecruiters_job_sync_options[webhook_enabled]"]').checked;
-                    var disableCron = document.querySelector('input[name="smartrecruiters_job_sync_options[disable_cron_when_webhook_active]"]').checked;
-                    var cronFields = document.querySelectorAll('tr:has(input[name*="runs_per_day_count"]), tr:has(input[name*="run_time_1"]), tr:has(input[name*="run_time_2"])');
-                    
-                    if (webhookEnabled && disableCron) {
-                        cronFields.forEach(function(field) {
-                            field.style.display = 'none';
-                        });
-                    } else {
-                        cronFields.forEach(function(field) {
-                            field.style.display = '';
-                        });
-                    }
-                }
-
-                // Initial toggle
-                toggleCronSettings();
-
-                // Toggle on change
-                document.querySelector('input[name="smartrecruiters_job_sync_options[webhook_enabled]"]').addEventListener('change', toggleCronSettings);
-                document.querySelector('input[name="smartrecruiters_job_sync_options[disable_cron_when_webhook_active]"]').addEventListener('change', toggleCronSettings);
             </script>
         </div>
         <?php
@@ -661,30 +613,6 @@ class SmartRecruitersJobSyncPlugin
             'smartrecruiters_api_section'
         );
 
-        // Run times per day settings (1-2 specific times)
-        add_settings_field(
-            'runs_per_day_count',
-            'Runs Per Day',
-            array($this, 'runs_per_day_count_callback'),
-            'smartrecruiters_job_sync_settings',
-            'smartrecruiters_api_section'
-        );
-
-        add_settings_field(
-            'run_time_1',
-            'Run Time #1 (HH:MM)',
-            array($this, 'run_time_1_callback'),
-            'smartrecruiters_job_sync_settings',
-            'smartrecruiters_api_section'
-        );
-
-        add_settings_field(
-            'run_time_2',
-            'Run Time #2 (HH:MM)',
-            array($this, 'run_time_2_callback'),
-            'smartrecruiters_job_sync_settings',
-            'smartrecruiters_api_section'
-        );
 
         // Webhook settings section
         add_settings_section(
@@ -702,21 +630,7 @@ class SmartRecruitersJobSyncPlugin
             'smartrecruiters_webhook_section'
         );
 
-        add_settings_field(
-            'webhook_secret',
-            'Webhook Secret',
-            array($this, 'webhook_secret_callback'),
-            'smartrecruiters_job_sync_settings',
-            'smartrecruiters_webhook_section'
-        );
 
-        add_settings_field(
-            'disable_cron_when_webhook_active',
-            'Disable Cron When Webhook Active',
-            array($this, 'disable_cron_when_webhook_active_callback'),
-            'smartrecruiters_job_sync_settings',
-            'smartrecruiters_webhook_section'
-        );
     }
 
     /**
@@ -759,38 +673,6 @@ class SmartRecruitersJobSyncPlugin
     }
 
 
-    // Runs per day count (1 or 2)
-    public function runs_per_day_count_callback()
-    {
-        $options = get_option('smartrecruiters_job_sync_options');
-        $value = isset($options['runs_per_day_count']) ? intval($options['runs_per_day_count']) : 1;
-        if ($value !== 2) {
-            $value = 1;
-        }
-        echo '<select name="smartrecruiters_job_sync_options[runs_per_day_count]">'
-            . '<option value="1"' . selected($value, 1, false) . '>1</option>'
-            . '<option value="2"' . selected($value, 2, false) . '>2</option>'
-            . '</select>';
-        echo '<p class="description">Choose how many times per day the sync should run.</p>';
-    }
-
-    // Run time #1 input
-    public function run_time_1_callback()
-    {
-        $options = get_option('smartrecruiters_job_sync_options');
-        $value = isset($options['run_time_1']) ? $options['run_time_1'] : '01:00';
-        echo '<input type="time" name="smartrecruiters_job_sync_options[run_time_1]" value="' . esc_attr($value) . '" />';
-        echo '<p class="description">First run time (24h format, site timezone)</p>';
-    }
-
-    // Run time #2 input
-    public function run_time_2_callback()
-    {
-        $options = get_option('smartrecruiters_job_sync_options');
-        $value = isset($options['run_time_2']) ? $options['run_time_2'] : '13:00';
-        echo '<input type="time" name="smartrecruiters_job_sync_options[run_time_2]" value="' . esc_attr($value) . '" />';
-        echo '<p class="description">Second run time (used only if Runs Per Day = 2)</p>';
-    }
 
     /**
      * Webhook section callback
@@ -825,76 +707,9 @@ class SmartRecruitersJobSyncPlugin
         echo '<p class="description">Secret key for webhook verification (optional but recommended for security)</p>';
     }
 
-    /**
-     * Disable cron when webhook active callback
-     */
-    public function disable_cron_when_webhook_active_callback()
-    {
-        $options = get_option('smartrecruiters_job_sync_options');
-        $value = isset($options['disable_cron_when_webhook_active']) ? $options['disable_cron_when_webhook_active'] : '1';
-        echo '<input type="checkbox" name="smartrecruiters_job_sync_options[disable_cron_when_webhook_active]" value="1"' . checked($value, '1', false) . ' />';
-        echo '<p class="description">Automatically disable cron jobs when webhooks are active (recommended for real-time sync)</p>';
-    }
 
 
 
-    /**
-     * Schedule cron job
-     */
-    public function schedule_cron()
-    {
-        $options = get_option('smartrecruiters_job_sync_options');
-        
-        // Check if webhooks are active and cron should be disabled
-        if (!empty($options['webhook_enabled']) && !empty($options['disable_cron_when_webhook_active'])) {
-            // Clear any existing cron jobs when webhooks are active
-            wp_clear_scheduled_hook('smartrecruiters_job_sync_cron', array('slot' => 1));
-            wp_clear_scheduled_hook('smartrecruiters_job_sync_cron', array('slot' => 2));
-            return;
-        }
-        
-        $runs = isset($options['runs_per_day_count']) && intval($options['runs_per_day_count']) === 2 ? 2 : 1;
-        $time1 = isset($options['run_time_1']) ? $options['run_time_1'] : '01:00';
-        $time2 = isset($options['run_time_2']) ? $options['run_time_2'] : '13:00';
-
-        $this->maybe_schedule_daily_slot($time1, 1);
-        if ($runs === 2) {
-            $this->maybe_schedule_daily_slot($time2, 2);
-        }
-    }
-
-    /**
-     * Reschedule cron when settings change
-     */
-    public function reschedule_cron_on_settings_change($old_value, $value)
-    {
-        // Clear previous schedule
-        wp_clear_scheduled_hook('smartrecruiters_job_sync_cron', array('slot' => 1));
-        wp_clear_scheduled_hook('smartrecruiters_job_sync_cron', array('slot' => 2));
-
-        // Schedule with daily interval at configured times
-        $this->schedule_cron();
-    }
-
-    // Helper to schedule a daily event at a specific time (HH:MM) with a slot arg
-    private function maybe_schedule_daily_slot($hhmm, $slot)
-    {
-        if (empty($hhmm))
-            return;
-        $parts = explode(':', $hhmm);
-        $hour = isset($parts[0]) ? intval($parts[0]) : 0;
-        $min = isset($parts[1]) ? intval($parts[1]) : 0;
-
-        $now = current_time('timestamp');
-        $next = mktime($hour, $min, 0, date('n', $now), date('j', $now), date('Y', $now));
-        if ($next <= $now) {
-            $next = strtotime('+1 day', $next);
-        }
-
-        if (!wp_next_scheduled('smartrecruiters_job_sync_cron', array('slot' => $slot))) {
-            wp_schedule_event($next, 'daily', 'smartrecruiters_job_sync_cron', array('slot' => $slot));
-        }
-    }
 
     /**
      * Add webhook endpoint
