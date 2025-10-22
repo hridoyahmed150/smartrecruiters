@@ -628,6 +628,11 @@ class SmartRecruitersAPISyncV2
                     $job_details = $job_summary;
                 }
 
+                // Attach original summary payload so we can store it too
+                if (is_array($job_details)) {
+                    $job_details['__summary'] = $job_summary;
+                }
+
                 $this->create_job($job_details);
                 $added++;
             }
@@ -791,17 +796,17 @@ class SmartRecruitersAPISyncV2
         // Debug: Log the actual API response structure
         error_log('SmartRecruiters: Job data structure: ' . print_r(array_keys($job_data), true));
         error_log('SmartRecruiters: Full job data: ' . json_encode($job_data, JSON_PRETTY_PRINT));
-        
+
         if (isset($job_data['jobAd'])) {
             error_log('SmartRecruiters: jobAd found: ' . print_r($job_data['jobAd'], true));
         } else {
             error_log('SmartRecruiters: No jobAd field found in API response');
         }
-        
+
         if (isset($job_data['jobAdSections'])) {
             error_log('SmartRecruiters: jobAdSections found: ' . print_r($job_data['jobAdSections'], true));
         }
-        
+
         if (isset($job_data['ad'])) {
             error_log('SmartRecruiters: ad field found: ' . print_r($job_data['ad'], true));
         }
@@ -826,8 +831,9 @@ class SmartRecruitersAPISyncV2
                 '_job_department' => $job_data['department']['label'] ?? '',
                 '_job_language' => $job_data['language']['label'] ?? '',
 
-                // Experience level
-                '_job_experience_level' => $job_data['experienceLevel'] ?? '',
+                // Experience level (label + full object JSON)
+                '_job_experience_level' => is_array($job_data['experienceLevel'] ?? null) ? ($job_data['experienceLevel']['label'] ?? '') : ($job_data['experienceLevel'] ?? ''),
+                '_job_experience_level_full' => json_encode($job_data['experienceLevel'] ?? array()),
 
                 // Full location object (JSON)
                 '_job_location_full' => json_encode($job_data['location'] ?? array()),
@@ -843,6 +849,9 @@ class SmartRecruitersAPISyncV2
 
                 // Job Ad sections (full object) - check multiple possible field names
                 '_job_ad_full' => json_encode($job_data['jobAd'] ?? $job_data['jobAdSections'] ?? $job_data['ad'] ?? array()),
+
+                // Original jobs list summary object
+                '_job_summary_full' => json_encode($job_data['__summary'] ?? array()),
 
                 // Dates
                 '_job_created_on' => $job_data['createdOn'] ?? '',
