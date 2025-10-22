@@ -397,6 +397,8 @@ class SmartRecruitersJobSyncPlugin
             <p>Click the button below to manually sync jobs from SmartRecruiters API.</p>
             <button type="button" id="manual-sync-btn" class="button button-primary">Sync Jobs Now</button>
             <div id="sync-status" style="margin-top: 10px;"></div>
+            <textarea id="sync-log" style="margin-top:10px;width:100%;height:180px;white-space:pre;" readonly
+                placeholder="Logs will appear here..."></textarea>
 
             <script>
                 document.getElementById('manual-sync-btn').addEventListener('click', function () {
@@ -409,14 +411,23 @@ class SmartRecruitersJobSyncPlugin
 
                     fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
                         method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                         body: 'action=manual_smartrecruiters_sync&nonce=<?php echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
                     })
                         .then(response => response.json())
                         .then(data => {
+                            if (data.success) {
+                                status.innerHTML = '<p style="color: green;">' + (data.data.message || 'Sync completed') + '</p>';
+                            } else {
+                                status.innerHTML = '<p style="color: red;">' + (data.data || 'Sync failed') + '</p>';
+                            }
+                            var logs = (data.data && data.data.logs) ? data.data.logs : [];
+                            document.getElementById('sync-log').value = Array.isArray(logs) ? logs.join('\n') : (logs || '');
                             console.log(data);
                         })
                         .catch(error => {
-                            console.error('Error:', error);
+                            status.innerHTML = '<p style="color: red;">Request error: ' + error.message + '</p>';
+                            document.getElementById('sync-log').value = 'Request error: ' + error.message;
                         })
                         .finally(() => {
                             btn.disabled = false;
@@ -573,9 +584,9 @@ class SmartRecruitersJobSyncPlugin
         $result = $this->sync_jobs();
 
         if ($result['success']) {
-            wp_send_json_success(array('message' => $result['message']));
+            wp_send_json_success(array('message' => $result['message'], 'logs' => ($result['logs'] ?? array())));
         } else {
-            wp_send_json_error($result['message']);
+            wp_send_json_error(array('message' => $result['message'], 'logs' => ($result['logs'] ?? array())));
         }
     }
 
@@ -642,6 +653,7 @@ class SmartRecruitersAPISyncV2
 {
 
     private $options;
+    private $logs = array();
 
     public function __construct()
     {
@@ -651,6 +663,7 @@ class SmartRecruitersAPISyncV2
     public function sync_jobs()
     {
         try {
+            $this->logs = array();
             $access_token = $this->get_access_token();
             if (!$access_token) {
                 throw new Exception('Failed to obtain access token from SmartRecruiters API');
@@ -685,18 +698,21 @@ class SmartRecruitersAPISyncV2
 
                 $this->create_job($job_details);
                 $added++;
+                $this->logs[] = 'Synced job: ' . ($job_details['title'] ?? $job_id) . ' (' . $job_id . ')';
             }
 
             return array(
                 'success' => true,
-                'message' => sprintf('SmartRecruiters v2 sync completed: %d jobs refreshed with details', $added)
+                'message' => sprintf('SmartRecruiters v2 sync completed: %d jobs refreshed with details', $added),
+                'logs' => $this->logs
             );
 
         } catch (Exception $e) {
             error_log('SmartRecruiters Job Sync V2 Error: ' . $e->getMessage());
             return array(
                 'success' => false,
-                'message' => 'SmartRecruiters v2 sync failed: ' . $e->getMessage()
+                'message' => 'SmartRecruiters v2 sync failed: ' . $e->getMessage(),
+                'logs' => $this->logs
             );
         }
     }
@@ -746,6 +762,7 @@ class SmartRecruitersAPISyncV2
         do {
             $jobs_url = $this->options['api_url'] . '/jobs?limit=' . $limit . '&offset=' . $offset;
 
+            $this->logs[] = 'Fetching jobs list: ' . $jobs_url;
             $response = wp_remote_get($jobs_url, array(
                 'timeout' => 30,
                 'headers' => array(
@@ -757,6 +774,7 @@ class SmartRecruitersAPISyncV2
 
             if (is_wp_error($response)) {
                 error_log('SmartRecruiters: Error fetching jobs: ' . $response->get_error_message());
+                $this->logs[] = 'Jobs list error: ' . $response->get_error_message();
                 break;
             }
 
@@ -765,12 +783,14 @@ class SmartRecruitersAPISyncV2
 
             if ($response_code !== 200) {
                 error_log('SmartRecruiters: API Error - HTTP ' . $response_code . ': ' . $body);
+                $this->logs[] = 'Jobs list HTTP ' . $response_code . ': ' . substr($body, 0, 300);
                 break;
             }
 
             $data = json_decode($body, true);
             if (json_last_error() !== JSON_ERROR_NONE) {
                 error_log('SmartRecruiters: JSON Decode Error: ' . json_last_error_msg());
+                $this->logs[] = 'Jobs list JSON decode error: ' . json_last_error_msg();
                 break;
             }
 
@@ -783,6 +803,7 @@ class SmartRecruitersAPISyncV2
             $offset += $limit;
 
             error_log('SmartRecruiters: Fetched ' . count($jobs) . ' jobs, total so far: ' . count($all_jobs));
+            $this->logs[] = 'Fetched ' . count($jobs) . ' jobs (total: ' . count($all_jobs) . ')';
 
         } while (count($jobs) === $limit);
 
@@ -799,6 +820,7 @@ class SmartRecruitersAPISyncV2
 
         $details_url = rtrim($this->options['api_url'], '/') . '/jobs/' . $job_id;
 
+        $this->logs[] = 'Fetching job details: ' . $details_url;
         $response = wp_remote_get($details_url, array(
             'timeout' => 30,
             'headers' => array(
@@ -810,6 +832,7 @@ class SmartRecruitersAPISyncV2
 
         if (is_wp_error($response)) {
             error_log('SmartRecruiters: Error fetching job details for ID ' . $job_id . ': ' . $response->get_error_message());
+            $this->logs[] = 'Job details error: ' . $response->get_error_message();
             return false;
         }
 
@@ -818,12 +841,14 @@ class SmartRecruitersAPISyncV2
 
         if ($response_code !== 200) {
             error_log('SmartRecruiters: Job details API Error for ID ' . $job_id . ' - HTTP ' . $response_code . ': ' . $body);
+            $this->logs[] = 'Job details HTTP ' . $response_code . ' for ' . $job_id . ': ' . substr($body, 0, 300);
             return false;
         }
 
         $data = json_decode($body, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
             error_log('SmartRecruiters: Job details JSON Decode Error for ID ' . $job_id . ': ' . json_last_error_msg());
+            $this->logs[] = 'Job details JSON decode error for ' . $job_id . ': ' . json_last_error_msg();
             return false;
         }
 
