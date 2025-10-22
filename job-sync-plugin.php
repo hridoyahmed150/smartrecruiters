@@ -36,7 +36,7 @@ class SmartRecruitersJobSyncPlugin
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
 
         // Cron hooks
-        add_action('smartrecruiters_job_sync_cron', array($this, 'sync_jobs'));
+        add_action('smartrecruiters_job_sync_cron', array($this, 'sync_jobs'), 10, 1);
 
         // Add custom cron interval
         add_filter('cron_schedules', array($this, 'add_custom_cron_interval'));
@@ -400,6 +400,40 @@ class SmartRecruitersJobSyncPlugin
             <textarea id="sync-log" style="margin-top:10px;width:100%;height:180px;white-space:pre;" readonly
                 placeholder="Logs will appear here..."></textarea>
 
+            <hr>
+            <h2>Next Scheduled Runs</h2>
+            <div id="next-runs">
+                <?php
+                $opts = get_option('smartrecruiters_job_sync_options');
+                $runs = isset($opts['runs_per_day_count']) && intval($opts['runs_per_day_count']) === 2 ? 2 : 1;
+                $time1 = isset($opts['run_time_1']) ? $opts['run_time_1'] : '01:00';
+                $time2 = isset($opts['run_time_2']) ? $opts['run_time_2'] : '13:00';
+                $next1 = wp_next_scheduled('smartrecruiters_job_sync_cron', array('slot' => 1));
+                $next2 = wp_next_scheduled('smartrecruiters_job_sync_cron', array('slot' => 2));
+                echo '<p>Run #1 (' . esc_html($time1) . '): ' . ($next1 ? date('Y-m-d H:i:s', $next1) : 'not scheduled') . '</p>';
+                if ($runs === 2) {
+                    echo '<p>Run #2 (' . esc_html($time2) . '): ' . ($next2 ? date('Y-m-d H:i:s', $next2) : 'not scheduled') . '</p>';
+                }
+                ?>
+            </div>
+
+            <hr>
+            <h2>Last Run</h2>
+            <div id="last-run">
+                <?php
+                $last = get_option('smartrecruiters_last_run');
+                if ($last) {
+                    echo '<p><strong>Time:</strong> ' . date('Y-m-d H:i:s', intval($last['timestamp'])) . '</p>';
+                    echo '<p><strong>Status:</strong> ' . (!empty($last['success']) ? '<span style="color:green;">Success</span>' : '<span style="color:red;">Failed</span>') . '</p>';
+                    echo '<p><strong>Message:</strong> ' . esc_html($last['message'] ?? '') . '</p>';
+                    $lr_logs = isset($last['logs']) ? $last['logs'] : array();
+                    echo '<textarea style="width:100%;height:180px;white-space:pre;" readonly>' . esc_textarea(is_array($lr_logs) ? implode("\n", $lr_logs) : $lr_logs) . '</textarea>';
+                } else {
+                    echo '<p>No runs recorded yet.</p>';
+                }
+                ?>
+            </div>
+
             <script>
                 document.getElementById('manual-sync-btn').addEventListener('click', function () {
                     var btn = this;
@@ -503,6 +537,31 @@ class SmartRecruitersJobSyncPlugin
             'smartrecruiters_job_sync_settings',
             'smartrecruiters_api_section'
         );
+
+        // Run times per day settings (1-2 specific times)
+        add_settings_field(
+            'runs_per_day_count',
+            'Runs Per Day',
+            array($this, 'runs_per_day_count_callback'),
+            'smartrecruiters_job_sync_settings',
+            'smartrecruiters_api_section'
+        );
+
+        add_settings_field(
+            'run_time_1',
+            'Run Time #1 (HH:MM)',
+            array($this, 'run_time_1_callback'),
+            'smartrecruiters_job_sync_settings',
+            'smartrecruiters_api_section'
+        );
+
+        add_settings_field(
+            'run_time_2',
+            'Run Time #2 (HH:MM)',
+            array($this, 'run_time_2_callback'),
+            'smartrecruiters_job_sync_settings',
+            'smartrecruiters_api_section'
+        );
     }
 
     /**
@@ -545,14 +604,54 @@ class SmartRecruitersJobSyncPlugin
     }
 
 
+    // Runs per day count (1 or 2)
+    public function runs_per_day_count_callback()
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $value = isset($options['runs_per_day_count']) ? intval($options['runs_per_day_count']) : 1;
+        if ($value !== 2) {
+            $value = 1;
+        }
+        echo '<select name="smartrecruiters_job_sync_options[runs_per_day_count]">'
+            . '<option value="1"' . selected($value, 1, false) . '>1</option>'
+            . '<option value="2"' . selected($value, 2, false) . '>2</option>'
+            . '</select>';
+        echo '<p class="description">Choose how many times per day the sync should run.</p>';
+    }
+
+    // Run time #1 input
+    public function run_time_1_callback()
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $value = isset($options['run_time_1']) ? $options['run_time_1'] : '01:00';
+        echo '<input type="time" name="smartrecruiters_job_sync_options[run_time_1]" value="' . esc_attr($value) . '" />';
+        echo '<p class="description">First run time (24h format, site timezone)</p>';
+    }
+
+    // Run time #2 input
+    public function run_time_2_callback()
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $value = isset($options['run_time_2']) ? $options['run_time_2'] : '13:00';
+        echo '<input type="time" name="smartrecruiters_job_sync_options[run_time_2]" value="' . esc_attr($value) . '" />';
+        echo '<p class="description">Second run time (used only if Runs Per Day = 2)</p>';
+    }
+
+
 
     /**
      * Schedule cron job
      */
     public function schedule_cron()
     {
-        if (!wp_next_scheduled('smartrecruiters_job_sync_cron')) {
-            wp_schedule_event(time(), 'daily', 'smartrecruiters_job_sync_cron');
+        $options = get_option('smartrecruiters_job_sync_options');
+        $runs = isset($options['runs_per_day_count']) && intval($options['runs_per_day_count']) === 2 ? 2 : 1;
+        $time1 = isset($options['run_time_1']) ? $options['run_time_1'] : '01:00';
+        $time2 = isset($options['run_time_2']) ? $options['run_time_2'] : '13:00';
+
+        $this->maybe_schedule_daily_slot($time1, 1);
+        if ($runs === 2) {
+            $this->maybe_schedule_daily_slot($time2, 2);
         }
     }
 
@@ -562,11 +661,30 @@ class SmartRecruitersJobSyncPlugin
     public function reschedule_cron_on_settings_change($old_value, $value)
     {
         // Clear previous schedule
-        wp_clear_scheduled_hook('smartrecruiters_job_sync_cron');
+        wp_clear_scheduled_hook('smartrecruiters_job_sync_cron', array('slot' => 1));
+        wp_clear_scheduled_hook('smartrecruiters_job_sync_cron', array('slot' => 2));
 
-        // Schedule with daily interval
-        if (!wp_next_scheduled('smartrecruiters_job_sync_cron')) {
-            wp_schedule_event(time(), 'daily', 'smartrecruiters_job_sync_cron');
+        // Schedule with daily interval at configured times
+        $this->schedule_cron();
+    }
+
+    // Helper to schedule a daily event at a specific time (HH:MM) with a slot arg
+    private function maybe_schedule_daily_slot($hhmm, $slot)
+    {
+        if (empty($hhmm))
+            return;
+        $parts = explode(':', $hhmm);
+        $hour = isset($parts[0]) ? intval($parts[0]) : 0;
+        $min = isset($parts[1]) ? intval($parts[1]) : 0;
+
+        $now = current_time('timestamp');
+        $next = mktime($hour, $min, 0, date('n', $now), date('j', $now), date('Y', $now));
+        if ($next <= $now) {
+            $next = strtotime('+1 day', $next);
+        }
+
+        if (!wp_next_scheduled('smartrecruiters_job_sync_cron', array('slot' => $slot))) {
+            wp_schedule_event($next, 'daily', 'smartrecruiters_job_sync_cron', array('slot' => $slot));
         }
     }
 
@@ -593,7 +711,7 @@ class SmartRecruitersJobSyncPlugin
     /**
      * Main sync function
      */
-    public function sync_jobs()
+    public function sync_jobs($args = array())
     {
         $options = get_option('smartrecruiters_job_sync_options');
 
@@ -618,7 +736,16 @@ class SmartRecruitersJobSyncPlugin
         error_log('SmartRecruiters: Client Secret: ' . (empty($options['client_secret']) ? 'EMPTY' : 'SET'));
 
         $api_sync = new SmartRecruitersAPISync();
-        return $api_sync->sync_jobs();
+        $result = $api_sync->sync_jobs();
+        // Persist last run info (for cron or manual) to display in admin
+        $last_run = array(
+            'timestamp' => time(),
+            'message' => isset($result['message']) ? $result['message'] : '',
+            'success' => !empty($result['success']),
+            'logs' => isset($result['logs']) ? $result['logs'] : array(),
+        );
+        update_option('smartrecruiters_last_run', $last_run, false);
+        return $result;
     }
 
     /**
