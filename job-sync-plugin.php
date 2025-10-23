@@ -436,6 +436,14 @@ class SmartRecruitersJobSyncPlugin
         );
 
         add_settings_field(
+            'limit',
+            'Limit',
+            array($this, 'limit_callback'),
+            'smartrecruiters_job_sync_settings',
+            'smartrecruiters_api_section'
+        );
+
+        add_settings_field(
             'client_secret',
             'Client Secret',
             array($this, 'client_secret_callback'),
@@ -525,7 +533,7 @@ class SmartRecruitersJobSyncPlugin
         if ($result['success']) {
             wp_send_json_success(array('message' => $result['message']));
         } else {
-            wp_send_json_error($result['message']);
+            echo '<div class="notice notice-error"><p>' . $result['message'] . '</p></div>';
         }
     }
 
