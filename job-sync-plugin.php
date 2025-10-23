@@ -421,7 +421,7 @@ class SmartRecruitersJobSyncPlugin
                 <?php
                 $opts = get_option('smartrecruiters_job_sync_options');
                 $webhooks_active = !empty($opts['webhook_enabled']);
-                
+
                 if ($webhooks_active): ?>
                     <p><strong>Real-time sync active via webhooks</strong></p>
                     <p>Jobs will update instantly when changed in SmartRecruiters.</p>
@@ -544,31 +544,31 @@ class SmartRecruitersJobSyncPlugin
                         });
                 });
 
-                                                    // fetch(ajaxurl, {
-                                                    //     method: 'POST',
-                                                    //     headers: {
-                                                    //         'Content-Type': 'application/x-www-form-urlencoded',
-                                                    //     },
-                                                    //     body: 'action=manual_smartrecruiters_sync&nonce=' + '<?php //echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
-                                                    // })
-                                                    //     .then(response => response.json())
-                                                    //     .then(data => {
-                                                    //         // wnat to show the message in a console.log
-                                                    //         console.log(data);
-                                                    //         if (data.success) {
-                                                    //             status.innerHTML = '<p style="color: green;">' + data.data.message + '</p>';
-                                                    //         } else {
-                                                    //             status.innerHTML = '<p style="color: red;">Error: ' + data.data + '</p>';
-                                                    //         }
-                                                    //     })
-                                                    //     .catch(error => {
-                                                    //         status.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
-                                                    //     })
-                                                    //     .finally(() => {
-                                                    //         btn.disabled = false;
-                                                    //         btn.textContent = 'Sync Jobs Now';
-                                                    //     });
-                                                });
+                                                                    // fetch(ajaxurl, {
+                                                                    //     method: 'POST',
+                                                                    //     headers: {
+                                                                    //         'Content-Type': 'application/x-www-form-urlencoded',
+                                                                    //     },
+                                                                    //     body: 'action=manual_smartrecruiters_sync&nonce=' + '<?php //echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
+                                                                    // })
+                                                                    //     .then(response => response.json())
+                                                                    //     .then(data => {
+                                                                    //         // wnat to show the message in a console.log
+                                                                    //         console.log(data);
+                                                                    //         if (data.success) {
+                                                                    //             status.innerHTML = '<p style="color: green;">' + data.data.message + '</p>';
+                                                                    //         } else {
+                                                                    //             status.innerHTML = '<p style="color: red;">Error: ' + data.data + '</p>';
+                                                                    //         }
+                                                                    //     })
+                                                                    //     .catch(error => {
+                                                                    //         status.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+                                                                    //     })
+                                                                    //     .finally(() => {
+                                                                    //         btn.disabled = false;
+                                                                    //         btn.textContent = 'Sync Jobs Now';
+                                                                    //     });
+                                                                });
 
             </script>
         </div>
