@@ -61,21 +61,7 @@ class SmartRecruitersJobSyncPlugin
      */
     public function add_custom_cron_interval($schedules)
     {
-        $options = get_option('smartrecruiters_job_sync_options');
-        $minutes = isset($options['sync_interval_minutes']) ? intval($options['sync_interval_minutes']) : 10;
-        if ($minutes < 1) {
-            $minutes = 1;
-        }
-        // Cap to a reasonable upper bound to avoid huge schedules
-        if ($minutes > 1440) {
-            $minutes = 1440;
-        }
-
-        $key = 'smartrecruiters_every_' . $minutes . '_minutes';
-        $schedules[$key] = array(
-            'interval' => $minutes * 60,
-            'display' => sprintf(__('Every %d Minutes'), $minutes)
-        );
+        // No custom intervals needed - using WordPress default 'daily'
         return $schedules;
     }
 
@@ -171,6 +157,10 @@ class SmartRecruitersJobSyncPlugin
         $apply_url = get_post_meta($post->ID, '_job_apply_url', true);
         $external_id = get_post_meta($post->ID, '_job_external_id', true);
         $api_url = get_post_meta($post->ID, '_job_api_url', true);
+        $experience_level = get_post_meta($post->ID, '_job_experience_level', true);
+        $location_full = get_post_meta($post->ID, '_job_location_full', true);
+        $actions_full = get_post_meta($post->ID, '_job_actions_full', true);
+        $job_ad_full = get_post_meta($post->ID, '_job_ad_full', true);
 
         ?>
         <table class="form-table">
@@ -238,6 +228,26 @@ class SmartRecruitersJobSyncPlugin
                 <th><label for="job_api_url">API URL</label></th>
                 <td><input type="url" id="job_api_url" name="job_api_url" value="<?php echo esc_attr($api_url); ?>"
                         style="width: 100%;" readonly /></td>
+            </tr>
+            <tr>
+                <th><label for="job_experience_level">Experience Level</label></th>
+                <td><input type="text" id="job_experience_level" name="job_experience_level"
+                        value="<?php echo esc_attr($experience_level); ?>" style="width: 100%;" readonly /></td>
+            </tr>
+            <tr>
+                <th><label for="job_location_full">Location (Full Object)</label></th>
+                <td><textarea id="job_location_full" name="job_location_full" style="width: 100%; height: 100px;"
+                        readonly><?php echo esc_textarea($location_full); ?></textarea></td>
+            </tr>
+            <tr>
+                <th><label for="job_actions_full">Actions (Full Object)</label></th>
+                <td><textarea id="job_actions_full" name="job_actions_full" style="width: 100%; height: 100px;"
+                        readonly><?php echo esc_textarea($actions_full); ?></textarea></td>
+            </tr>
+            <tr>
+                <th><label for="job_ad_full">Job Ad (Full Object)</label></th>
+                <td><textarea id="job_ad_full" name="job_ad_full" style="width: 100%; height: 150px;"
+                        readonly><?php echo esc_textarea($job_ad_full); ?></textarea></td>
             </tr>
         </table>
         <?php
@@ -440,14 +450,6 @@ class SmartRecruitersJobSyncPlugin
             'smartrecruiters_job_sync_settings',
             'smartrecruiters_api_section'
         );
-
-        add_settings_field(
-            'sync_interval_minutes',
-            'Sync Interval (minutes)',
-            array($this, 'sync_interval_minutes_callback'),
-            'smartrecruiters_job_sync_settings',
-            'smartrecruiters_api_section'
-        );
     }
 
     /**
@@ -490,44 +492,14 @@ class SmartRecruitersJobSyncPlugin
     }
 
 
-    /**
-     * Limit callback
-     */
-    public function limit_callback()
-    {
-        $options = get_option('smartrecruiters_job_sync_options');
-        $value = isset($options['limit']) ? $options['limit'] : '100';
-        echo '<input type="number" name="smartrecruiters_job_sync_options[limit]" value="' . esc_attr($value) . '" min="1" max="1000" />';
-    }
-
-    /**
-     * Sync interval callback
-     */
-    public function sync_interval_minutes_callback()
-    {
-        $options = get_option('smartrecruiters_job_sync_options');
-        $value = isset($options['sync_interval_minutes']) ? $options['sync_interval_minutes'] : '10';
-        echo '<input type="number" name="smartrecruiters_job_sync_options[sync_interval_minutes]" value="' . esc_attr($value) . '" min="1" max="1440" />';
-        echo '<p class="description">How often to sync jobs (in minutes, 1-1440)</p>';
-    }
 
     /**
      * Schedule cron job
      */
     public function schedule_cron()
     {
-        $options = get_option('smartrecruiters_job_sync_options');
-        $minutes = isset($options['sync_interval_minutes']) ? intval($options['sync_interval_minutes']) : 10;
-        if ($minutes < 1) {
-            $minutes = 1;
-        }
-        if ($minutes > 1440) {
-            $minutes = 1440;
-        }
-        $schedule_key = 'smartrecruiters_every_' . $minutes . '_minutes';
-
         if (!wp_next_scheduled('smartrecruiters_job_sync_cron')) {
-            wp_schedule_event(time(), $schedule_key, 'smartrecruiters_job_sync_cron');
+            wp_schedule_event(time(), 'daily', 'smartrecruiters_job_sync_cron');
         }
     }
 
@@ -539,17 +511,9 @@ class SmartRecruitersJobSyncPlugin
         // Clear previous schedule
         wp_clear_scheduled_hook('smartrecruiters_job_sync_cron');
 
-        // Schedule with new interval
-        $minutes = isset($value['sync_interval_minutes']) ? intval($value['sync_interval_minutes']) : 10;
-        if ($minutes < 1) {
-            $minutes = 1;
-        }
-        if ($minutes > 1440) {
-            $minutes = 1440;
-        }
-        $schedule_key = 'smartrecruiters_every_' . $minutes . '_minutes';
+        // Schedule with daily interval
         if (!wp_next_scheduled('smartrecruiters_job_sync_cron')) {
-            wp_schedule_event(time(), $schedule_key, 'smartrecruiters_job_sync_cron');
+            wp_schedule_event(time(), 'daily', 'smartrecruiters_job_sync_cron');
         }
     }
 
@@ -561,13 +525,13 @@ class SmartRecruitersJobSyncPlugin
         check_ajax_referer('manual_smartrecruiters_sync_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
-            wp_die('Unauthorized');
+            wp_send_json_error('Unauthorized', 403);
         }
 
         $result = $this->sync_jobs();
 
         if ($result['success']) {
-            echo '<div class="notice notice-success"><p>' . $result['message'] . '</p></div>';
+            wp_send_json_success(array('message' => $result['message']));
         } else {
             echo '<div class="notice notice-error"><p>' . $result['message'] . '</p></div>';
         }
@@ -600,7 +564,7 @@ class SmartRecruitersJobSyncPlugin
         error_log('SmartRecruiters: Client ID: ' . $options['client_id']);
         error_log('SmartRecruiters: Client Secret: ' . (empty($options['client_secret']) ? 'EMPTY' : 'SET'));
 
-        $api_sync = new SmartRecruitersAPISync();
+        $api_sync = new SmartRecruitersAPISyncV2();
         return $api_sync->sync_jobs();
     }
 
@@ -613,17 +577,8 @@ class SmartRecruitersJobSyncPlugin
         flush_rewrite_rules();
 
         // Schedule initial cron
-        $options = get_option('smartrecruiters_job_sync_options');
-        $minutes = isset($options['sync_interval_minutes']) ? intval($options['sync_interval_minutes']) : 10;
-        if ($minutes < 1) {
-            $minutes = 1;
-        }
-        if ($minutes > 1440) {
-            $minutes = 1440;
-        }
-        $schedule_key = 'smartrecruiters_every_' . $minutes . '_minutes';
         if (!wp_next_scheduled('smartrecruiters_job_sync_cron')) {
-            wp_schedule_event(time(), $schedule_key, 'smartrecruiters_job_sync_cron');
+            wp_schedule_event(time(), 'daily', 'smartrecruiters_job_sync_cron');
         }
     }
 
@@ -636,10 +591,12 @@ class SmartRecruitersJobSyncPlugin
     }
 }
 
+
 /**
- * SmartRecruiters API Sync Class
+ * SmartRecruiters API Sync Class - Version 2
+ * Fetches list of jobs, then fetches each job's details and stores them
  */
-class SmartRecruitersAPISync
+class SmartRecruitersAPISyncV2
 {
 
     private $options;
@@ -649,64 +606,58 @@ class SmartRecruitersAPISync
         $this->options = get_option('smartrecruiters_job_sync_options');
     }
 
-    /**
-     * Main sync function
-     */
     public function sync_jobs()
     {
         try {
-            // Get access token
             $access_token = $this->get_access_token();
             if (!$access_token) {
                 throw new Exception('Failed to obtain access token from SmartRecruiters API');
             }
 
-            // Fetch jobs from SmartRecruiters API
+            // Get the list of jobs first
             $jobs = $this->fetch_jobs_from_api($access_token);
-            if (!$jobs) {
-                throw new Exception('Failed to fetch jobs from SmartRecruiters API');
+            if (!is_array($jobs)) {
+                throw new Exception('Failed to fetch jobs list from SmartRecruiters API');
             }
 
-            // Delete all existing job posts first
+            // Delete all existing job posts before re-creating
             $this->delete_all_existing_jobs();
 
-            // Create new jobs from API data
             $added = 0;
-            foreach ($jobs as $job_data) {
-                $external_id = $job_data['id'] ?? null;
-                if (!$external_id)
+            foreach ($jobs as $job_summary) {
+                $job_id = $job_summary['id'] ?? null;
+                if (!$job_id) {
                     continue;
+                }
 
-                $this->create_job($job_data);
+                $job_details = $this->fetch_single_job_details($access_token, $job_summary);
+                if (!$job_details) {
+                    // Fallback to summary if details missing
+                    $job_details = $job_summary;
+                }
+
+                $this->create_job($job_details);
                 $added++;
             }
 
             return array(
                 'success' => true,
-                'message' => sprintf('SmartRecruiters sync completed: %d jobs refreshed from API', $added)
+                'message' => sprintf('SmartRecruiters v2 sync completed: %d jobs refreshed with details', $added)
             );
 
         } catch (Exception $e) {
-            error_log('SmartRecruiters Job Sync Error: ' . $e->getMessage());
+            error_log('SmartRecruiters Job Sync V2 Error: ' . $e->getMessage());
             return array(
                 'success' => false,
-                'message' => 'SmartRecruiters sync failed: ' . $e->getMessage()
+                'message' => 'SmartRecruiters v2 sync failed: ' . $e->getMessage()
             );
         }
     }
 
-    /**
-     * Get OAuth2 access token from SmartRecruiters API
-     */
     private function get_access_token()
     {
         $token_url = $this->options['api_url'] . '/identity/oauth/token';
 
-        error_log('SmartRecruiters: Requesting access token from: ' . $token_url);
-        error_log('SmartRecruiters: Client ID: ' . $this->options['client_id']);
-        error_log('SmartRecruiters: Client Secret: ' . (empty($this->options['client_secret']) ? 'EMPTY' : 'SET'));
-
-        // SmartRecruiters API expects form-urlencoded data
         $data = array(
             'grant_type' => 'client_credentials',
             'client_id' => $this->options['client_id'],
@@ -722,57 +673,86 @@ class SmartRecruitersAPISync
         ));
 
         if (is_wp_error($response)) {
-            error_log('SmartRecruiters Token Error: ' . $response->get_error_message());
-            error_log('SmartRecruiters Token Error Code: ' . $response->get_error_code());
             return false;
         }
 
         $response_code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
 
-        error_log('SmartRecruiters: Token Response Code: ' . $response_code);
-        error_log('SmartRecruiters: Token Response Body: ' . $body);
-
         if ($response_code !== 200) {
-            error_log('SmartRecruiters Token Error - HTTP ' . $response_code . ': ' . $body);
             return false;
         }
 
         $token_data = json_decode($body, true);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            error_log('SmartRecruiters: Token JSON Decode Error: ' . json_last_error_msg());
-            return false;
-        }
-
         if (isset($token_data['access_token'])) {
-            error_log('SmartRecruiters: Successfully obtained access token');
             return $token_data['access_token'];
-        } else {
-            error_log('SmartRecruiters Token Error: No access_token in response - ' . $body);
-            if (isset($token_data['error'])) {
-                error_log('SmartRecruiters Token Error: ' . $token_data['error']);
-            }
-            if (isset($token_data['error_description'])) {
-                error_log('SmartRecruiters Token Error Description: ' . $token_data['error_description']);
-            }
-            return false;
         }
+        return false;
     }
 
-    /**
-     * Fetch jobs from SmartRecruiters API
-     */
     private function fetch_jobs_from_api($access_token)
     {
-        $limit = $this->options['limit'] ?? 100;
-        // SmartRecruiters jobs endpoint
-        $jobs_url = $this->options['api_url'] . '/jobs?limit=' . $limit;
+        $all_jobs = array();
+        $offset = 0;
+        $limit = 100;
 
-        error_log('SmartRecruiters: Fetching jobs from URL: ' . $jobs_url);
-        error_log('SmartRecruiters: Using access token: ' . substr($access_token, 0, 20) . '...');
+        do {
+            $jobs_url = $this->options['api_url'] . '/jobs?limit=' . $limit . '&offset=' . $offset;
 
-        $response = wp_remote_get($jobs_url, array(
+            $response = wp_remote_get($jobs_url, array(
+                'timeout' => 30,
+                'headers' => array(
+                    'Authorization' => 'Bearer ' . $access_token,
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json'
+                )
+            ));
+
+            if (is_wp_error($response)) {
+                error_log('SmartRecruiters: Error fetching jobs: ' . $response->get_error_message());
+                break;
+            }
+
+            $response_code = wp_remote_retrieve_response_code($response);
+            $body = wp_remote_retrieve_body($response);
+
+            if ($response_code !== 200) {
+                error_log('SmartRecruiters: API Error - HTTP ' . $response_code . ': ' . $body);
+                break;
+            }
+
+            $data = json_decode($body, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                error_log('SmartRecruiters: JSON Decode Error: ' . json_last_error_msg());
+                break;
+            }
+
+            $jobs = isset($data['content']) ? $data['content'] : $data;
+            if (empty($jobs)) {
+                break;
+            }
+
+            $all_jobs = array_merge($all_jobs, $jobs);
+            $offset += $limit;
+
+            error_log('SmartRecruiters: Fetched ' . count($jobs) . ' jobs, total so far: ' . count($all_jobs));
+
+        } while (count($jobs) === $limit);
+
+        error_log('SmartRecruiters: Total jobs fetched: ' . count($all_jobs));
+        return $all_jobs;
+    }
+
+    private function fetch_single_job_details($access_token, $job_summary)
+    {
+        $job_id = $job_summary['id'] ?? null;
+        if (!$job_id) {
+            return false;
+        }
+
+        $details_url = rtrim($this->options['api_url'], '/') . '/jobs/' . $job_id;
+
+        $response = wp_remote_get($details_url, array(
             'timeout' => 30,
             'headers' => array(
                 'Authorization' => 'Bearer ' . $access_token,
@@ -782,65 +762,40 @@ class SmartRecruitersAPISync
         ));
 
         if (is_wp_error($response)) {
-            error_log('SmartRecruiters Jobs Fetch Error: ' . $response->get_error_message());
-            error_log('SmartRecruiters Jobs Fetch Error Code: ' . $response->get_error_code());
+            error_log('SmartRecruiters: Error fetching job details for ID ' . $job_id . ': ' . $response->get_error_message());
             return false;
         }
 
         $response_code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
 
-        error_log('SmartRecruiters: API Response Code: ' . $response_code);
-        error_log('SmartRecruiters: API Response Body: ' . $body);
-
         if ($response_code !== 200) {
-            error_log('SmartRecruiters Jobs Fetch Error - HTTP ' . $response_code . ': ' . $body);
+            error_log('SmartRecruiters: Job details API Error for ID ' . $job_id . ' - HTTP ' . $response_code . ': ' . $body);
             return false;
         }
 
         $data = json_decode($body, true);
-
         if (json_last_error() !== JSON_ERROR_NONE) {
-            error_log('SmartRecruiters: JSON Decode Error: ' . json_last_error_msg());
+            error_log('SmartRecruiters: Job details JSON Decode Error for ID ' . $job_id . ': ' . json_last_error_msg());
             return false;
         }
 
-        // SmartRecruiters returns jobs directly in the response
-        $jobs = isset($data['content']) ? $data['content'] : $data;
-        error_log('SmartRecruiters: Found ' . count($jobs) . ' jobs in API response');
-
-        return $jobs;
+        return $data;
     }
 
-    /**
-     * Delete all existing job posts
-     */
     private function delete_all_existing_jobs()
     {
         global $wpdb;
-
-        // Get all job post IDs
         $job_posts = $wpdb->get_results(
             "SELECT ID FROM {$wpdb->posts} WHERE post_type = 'job'"
         );
-
-        $deleted_count = 0;
         foreach ($job_posts as $post) {
-            if (wp_delete_post($post->ID, true)) {
-                $deleted_count++;
-            }
+            wp_delete_post($post->ID, true);
         }
-
-        error_log('SmartRecruiters: Deleted ' . $deleted_count . ' existing job posts');
-        return $deleted_count;
     }
 
-    /**
-     * Create new job post from SmartRecruiters data
-     */
     private function create_job($job_data)
     {
-        // Map SmartRecruiters fields to our custom fields based on actual API response
         $title = $job_data['title'] ?? 'Untitled Job';
         $description = $this->format_job_description($job_data);
 
@@ -850,133 +805,97 @@ class SmartRecruitersAPISync
             'post_status' => 'publish',
             'post_type' => 'job',
             'meta_input' => array(
+                // Basic job info
                 '_job_title' => $job_data['title'] ?? '',
                 '_job_ref_number' => $job_data['refNumber'] ?? '',
                 '_job_status' => $job_data['status'] ?? '',
                 '_job_posting_status' => $job_data['postingStatus'] ?? '',
+                '_job_external_id' => $job_data['id'] ?? '',
+
+                // Department and language
                 '_job_department' => $job_data['department']['label'] ?? '',
-                '_job_location' => $this->format_location($job_data['location'] ?? array()),
                 '_job_language' => $job_data['language']['label'] ?? '',
+
+                // Experience level
+                '_job_experience_level' => $job_data['experienceLevel'] ?? '',
+
+                // Full location object (JSON)
+                '_job_location_full' => json_encode($job_data['location'] ?? array()),
+                '_job_location' => $this->format_location($job_data['location'] ?? array()),
                 '_job_country_code' => $job_data['location']['countryCode'] ?? '',
                 '_job_city' => $job_data['location']['city'] ?? '',
                 '_job_region_code' => $job_data['location']['regionCode'] ?? '',
-                '_job_remote' => $job_data['location']['remote'] ? 'REMOTE' : 'ONSITE',
+                '_job_remote' => !empty($job_data['location']['remote']) ? 'REMOTE' : 'ONSITE',
+
+                // Full actions object (JSON)
+                '_job_actions_full' => json_encode($job_data['actions'] ?? array()),
+                '_job_api_url' => $job_data['actions']['details']['url'] ?? '',
+
+                // Job Ad sections (full object)
+                '_job_ad_full' => json_encode($job_data['jobAd'] ?? array()),
+
+                // Dates
                 '_job_created_on' => $job_data['createdOn'] ?? '',
                 '_job_updated_on' => $job_data['updatedOn'] ?? '',
                 '_job_last_activity' => $job_data['lastActivityOn'] ?? '',
-                '_job_apply_url' => $job_data['refNumber'] ? 'https://jobs.smartrecruiters.com/' . $job_data['refNumber'] : '',
-                '_job_external_id' => $job_data['id'] ?? '',
-                '_job_api_url' => $job_data['actions']['details']['url'] ?? '',
+
+                // Apply URL
+                '_job_apply_url' => !empty($job_data['refNumber']) ? ('https://jobs.smartrecruiters.com/' . $job_data['refNumber']) : '',
+
+                // Sync info
                 '_job_last_synced' => time(),
                 '_job_sync_status' => 'synced'
             )
         );
 
-        $post_id = wp_insert_post($post_data);
-
-        if ($post_id && !is_wp_error($post_id)) {
-            error_log('SmartRecruiters: Created job post ID ' . $post_id . ' for job ' . $title);
-        }
-
-        return $post_id;
+        return wp_insert_post($post_data);
     }
 
-
-    /**
-     * Format job description from SmartRecruiters data
-     */
     private function format_job_description($job_data)
     {
         $description = '';
-
-        // Add basic job information
         $description .= '<h3>Job Information</h3>';
         $description .= '<p><strong>Title:</strong> ' . ($job_data['title'] ?? 'N/A') . '</p>';
         $description .= '<p><strong>Reference Number:</strong> ' . ($job_data['refNumber'] ?? 'N/A') . '</p>';
         $description .= '<p><strong>Status:</strong> ' . ($job_data['status'] ?? 'N/A') . '</p>';
         $description .= '<p><strong>Posting Status:</strong> ' . ($job_data['postingStatus'] ?? 'N/A') . '</p>';
-
         if (isset($job_data['department']['label'])) {
             $description .= '<p><strong>Department:</strong> ' . $job_data['department']['label'] . '</p>';
         }
-
         if (isset($job_data['location'])) {
             $location = $this->format_location($job_data['location']);
             if ($location) {
                 $description .= '<p><strong>Location:</strong> ' . $location . '</p>';
             }
         }
-
         if (isset($job_data['language']['label'])) {
             $description .= '<p><strong>Language:</strong> ' . $job_data['language']['label'] . '</p>';
         }
-
         if (isset($job_data['createdOn'])) {
             $description .= '<p><strong>Created:</strong> ' . date('Y-m-d H:i:s', strtotime($job_data['createdOn'])) . '</p>';
         }
-
         if (isset($job_data['updatedOn'])) {
             $description .= '<p><strong>Last Updated:</strong> ' . date('Y-m-d H:i:s', strtotime($job_data['updatedOn'])) . '</p>';
         }
-
         return $description;
     }
 
-    /**
-     * Format location from SmartRecruiters data
-     */
     private function format_location($location_data)
     {
         if (empty($location_data)) {
             return '';
         }
-
         $location_parts = array();
-
         if (isset($location_data['city'])) {
             $location_parts[] = $location_data['city'];
         }
-
         if (isset($location_data['regionCode'])) {
             $location_parts[] = $location_data['regionCode'];
         }
-
         if (isset($location_data['country'])) {
             $location_parts[] = $location_data['country'];
         }
-
         return implode(', ', $location_parts);
-    }
-
-    /**
-     * Format salary from SmartRecruiters data
-     */
-    private function format_salary($salary_data)
-    {
-        if (empty($salary_data)) {
-            return '';
-        }
-
-        $salary_parts = array();
-
-        if (isset($salary_data['min'])) {
-            $salary_parts[] = '$' . number_format($salary_data['min']);
-        }
-
-        if (isset($salary_data['max'])) {
-            $salary_parts[] = '$' . number_format($salary_data['max']);
-        }
-
-        if (isset($salary_data['currency'])) {
-            $currency = $salary_data['currency'];
-            if ($currency !== 'USD') {
-                $salary_parts = array_map(function ($amount) use ($currency) {
-                    return str_replace('$', $currency . ' ', $amount);
-                }, $salary_parts);
-            }
-        }
-
-        return implode(' - ', $salary_parts);
     }
 }
 
