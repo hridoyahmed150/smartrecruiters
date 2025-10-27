@@ -149,6 +149,7 @@ class SmartRecruitersJobSyncPlugin
         $city = get_post_meta($post->ID, '_job_city', true);
         $country_code = get_post_meta($post->ID, '_job_country_code', true);
         $region_code = get_post_meta($post->ID, '_job_region_code', true);
+        $postal_code = get_post_meta($post->ID, '_job_postal_code', true);
         $remote = get_post_meta($post->ID, '_job_remote', true);
         $apply_url = get_post_meta($post->ID, '_job_apply_url', true);
         $external_id = get_post_meta($post->ID, '_job_external_id', true);
@@ -209,6 +210,11 @@ class SmartRecruitersJobSyncPlugin
             <tr>
                 <th><label for="job_region_code">Region Code</label></th>
                 <td><input type="text" id="job_region_code" name="job_region_code" value="<?php echo esc_attr($region_code); ?>"
+                        style="width: 100%;" readonly /></td>
+            </tr>
+            <tr>
+                <th><label for="job_postal_code">Postal Code</label></th>
+                <td><input type="text" id="job_postal_code" name="job_postal_code" value="<?php echo esc_attr($postal_code); ?>"
                         style="width: 100%;" readonly /></td>
             </tr>
             <tr>
@@ -356,7 +362,8 @@ class SmartRecruitersJobSyncPlugin
             'job_remote' => '_job_remote',
             'job_salary' => '_job_salary',
             'job_apply_url' => '_job_apply_url',
-            'job_external_id' => '_job_external_id'
+            'job_external_id' => '_job_external_id',
+            'job_postal_code' => '_job_postal_code'
         );
 
         foreach ($fields as $field => $meta_key) {
@@ -544,31 +551,7 @@ class SmartRecruitersJobSyncPlugin
                         });
                 });
 
-                                                                    // fetch(ajaxurl, {
-                                                                    //     method: 'POST',
-                                                                    //     headers: {
-                                                                    //         'Content-Type': 'application/x-www-form-urlencoded',
-                                                                    //     },
-                                                                    //     body: 'action=manual_smartrecruiters_sync&nonce=' + '<?php //echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
-                                                                    // })
-                                                                    //     .then(response => response.json())
-                                                                    //     .then(data => {
-                                                                    //         // wnat to show the message in a console.log
-                                                                    //         console.log(data);
-                                                                    //         if (data.success) {
-                                                                    //             status.innerHTML = '<p style="color: green;">' + data.data.message + '</p>';
-                                                                    //         } else {
-                                                                    //             status.innerHTML = '<p style="color: red;">Error: ' + data.data + '</p>';
-                                                                    //         }
-                                                                    //     })
-                                                                    //     .catch(error => {
-                                                                    //         status.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
-                                                                    //     })
-                                                                    //     .finally(() => {
-                                                                    //         btn.disabled = false;
-                                                                    //         btn.textContent = 'Sync Jobs Now';
-                                                                    //     });
-                                                                });
+
 
             </script>
         </div>
@@ -1429,6 +1412,7 @@ class SmartRecruitersAPISync
                 '_job_country_code' => $job_data['location']['countryCode'] ?? '',
                 '_job_city' => $job_data['location']['city'] ?? '',
                 '_job_region_code' => $job_data['location']['regionCode'] ?? '',
+                '_job_postal_code' => $job_data['location']['postalCode'] ?? $job_data['location']['zipCode'] ?? '',
                 '_job_remote' => !empty($job_data['location']['remote']) ? 'REMOTE' : 'ONSITE',
 
                 // Full actions object (JSON)
@@ -1456,6 +1440,9 @@ class SmartRecruitersAPISync
                 '_job_properties_full' => json_encode($job_data['properties'] ?? array()),
                 '_job_partners_name' => $this->extract_partners_name($job_data['properties'] ?? array()),
 
+                // Individual Properties (extracted from properties array)
+                ...$this->extract_individual_properties($job_data['properties'] ?? array()),
+
                 // Dates
                 '_job_created_on' => $job_data['createdOn'] ?? '',
                 '_job_updated_on' => $job_data['updatedOn'] ?? '',
@@ -1463,6 +1450,8 @@ class SmartRecruitersAPISync
 
                 // Apply URL
                 '_job_apply_url' => !empty($job_data['refNumber']) ? ('https://jobs.smartrecruiters.com/' . $job_data['refNumber']) : '',
+                // aita asbe __job_actions_full aita applyOnWeb theke 
+                '_job_apply_on_web' => $job_data['actions']['applyOnWeb']['url'] ?? '',
 
                 // Sync info
                 '_job_last_synced' => time(),
@@ -1515,6 +1504,7 @@ class SmartRecruitersAPISync
                 '_job_country_code' => $job_data['location']['countryCode'] ?? '',
                 '_job_city' => $job_data['location']['city'] ?? '',
                 '_job_region_code' => $job_data['location']['regionCode'] ?? '',
+                '_job_postal_code' => $job_data['location']['postalCode'] ?? $job_data['location']['zipCode'] ?? '',
                 '_job_remote' => !empty($job_data['location']['remote']) ? 'REMOTE' : 'ONSITE',
 
                 // Full actions object (JSON)
@@ -1541,6 +1531,9 @@ class SmartRecruitersAPISync
                 // Properties (full object + Partners extraction)
                 '_job_properties_full' => json_encode($job_data['properties'] ?? array()),
                 '_job_partners_name' => $this->extract_partners_name($job_data['properties'] ?? array()),
+
+                // Individual Properties (extracted from properties array)
+                ...$this->extract_individual_properties($job_data['properties'] ?? array()),
 
                 // Dates
                 '_job_created_on' => $job_data['createdOn'] ?? '',
@@ -1621,6 +1614,33 @@ class SmartRecruitersAPISync
         }
 
         return '';
+    }
+
+    /**
+     * Extract individual properties and return as array of meta fields
+     */
+    private function extract_individual_properties($properties)
+    {
+        $property_meta = array();
+
+        if (!is_array($properties)) {
+            return $property_meta;
+        }
+
+        foreach ($properties as $property) {
+            if (isset($property['key']) && isset($property['value'])) {
+                $key = sanitize_key($property['key']);
+                $label = $property['value']['label'] ?? '';
+                $id = $property['value']['id'] ?? '';
+
+                // Store both label and ID
+                $property_meta['_job_property_' . $key . '_label'] = $label;
+                $property_meta['_job_property_' . $key . '_id'] = $id;
+                $property_meta['_job_property_' . $key . '_full'] = json_encode($property);
+            }
+        }
+
+        return $property_meta;
     }
 }
 
