@@ -1432,6 +1432,7 @@ class SmartRecruitersAPISync
                 '_job_ad_additional_information_title' => $additionalInformation['title'] ?? '',
                 '_job_ad_additional_information_text' => $additionalInformation['text'] ?? '',
                 '_job_ad_videos_urls' => json_encode($videosUrls),
+                '_job_type_of_employment' => $job_data['typeOfEmployment']['label'] ?? '',
 
                 // Original jobs list summary object
                 '_job_summary_full' => json_encode($job_data['__summary'] ?? array()),
@@ -1447,6 +1448,7 @@ class SmartRecruitersAPISync
                 '_job_created_on' => $job_data['createdOn'] ?? '',
                 '_job_updated_on' => $job_data['updatedOn'] ?? '',
                 '_job_last_activity' => $job_data['lastActivityOn'] ?? '',
+                '_job_expiration_date' => $job_data['targetHiringDate'] ?? '',
 
                 // Apply URL
                 '_job_apply_url' => !empty($job_data['refNumber']) ? ('https://jobs.smartrecruiters.com/' . $job_data['refNumber']) : '',
