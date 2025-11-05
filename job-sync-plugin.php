@@ -47,6 +47,7 @@ class SmartRecruitersJobSyncPlugin
         add_action('wp_ajax_delete_smartrecruiters_webhook', array($this, 'delete_webhook_ajax'));
 
         // Webhook endpoint for real-time job updates
+        add_filter('query_vars', array($this, 'add_webhook_query_var'));
         add_action('init', array($this, 'add_webhook_endpoint'));
         add_action('template_redirect', array($this, 'handle_webhook_request'));
     }
@@ -418,9 +419,85 @@ class SmartRecruitersJobSyncPlugin
             <hr>
             <h2>Webhook Management</h2>
             <p>Manage real-time webhook subscriptions for instant job updates.</p>
+
+            <?php
+            $webhook_id = get_option('smartrecruiters_webhook_id');
+            $webhook_secret = get_option('smartrecruiters_webhook_secret');
+            $webhook_url = home_url('/smartrecruiters-webhook/');
+            ?>
+
+            <div style="background: #f0f0f1; padding: 15px; margin: 15px 0; border-left: 4px solid #2271b1;">
+                <p><strong>Webhook URL:</strong> <code><?php echo esc_html($webhook_url); ?></code></p>
+                <?php if ($webhook_id): ?>
+                    <p><strong>Webhook ID:</strong> <code><?php echo esc_html($webhook_id); ?></code></p>
+                <?php endif; ?>
+                <?php if ($webhook_secret): ?>
+                    <p><strong>Handshake Status:</strong> <span style="color:green;">✅ Completed</span></p>
+                    <p><strong>Webhook Secret:</strong> <code><?php echo esc_html(substr($webhook_secret, 0, 20)) . '...'; ?></code>
+                    </p>
+                <?php else: ?>
+                    <p><strong>Handshake Status:</strong> <span style="color:orange;">⏳ Pending</span></p>
+                    <p class="description">Webhook create করার পর activate করলে handshake automatically হবে।</p>
+                <?php endif; ?>
+            </div>
+
             <button type="button" id="create-webhook-btn" class="button button-secondary">Create Webhook Subscription</button>
             <button type="button" id="delete-webhook-btn" class="button button-secondary">Delete Webhook Subscription</button>
             <div id="webhook-status" style="margin-top: 10px;"></div>
+
+            <p class="description" style="margin-top: 15px;">
+                <strong>Note:</strong> Webhook subscription create করার পর, SmartRecruiters automatically আপনার endpoint এ একটি
+                handshake request পাঠাবে।
+                Code automatically সেই request handle করবে এবং webhook activate হবে।
+            </p>
+
+            <hr>
+            <h2>Webhook Activity Log</h2>
+            <p>Recent webhook events and job updates:</p>
+            <div id="webhook-activity-log"
+                style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background: #fff;">
+                <?php
+                $webhook_logs = get_option('smartrecruiters_webhook_logs', array());
+                if (empty($webhook_logs)) {
+                    echo '<p style="color: #666;">No webhook activity yet. Activity will appear here when jobs are created, updated, or deleted in SmartRecruiters.</p>';
+                } else {
+                    echo '<table class="wp-list-table widefat fixed striped" style="margin-top: 0;">';
+                    echo '<thead><tr>';
+                    echo '<th style="width: 150px;">Time</th>';
+                    echo '<th style="width: 180px;">Event</th>';
+                    echo '<th style="width: 100px;">Job ID</th>';
+                    echo '<th>Job Title</th>';
+                    echo '<th style="width: 100px;">Status</th>';
+                    echo '</tr></thead>';
+                    echo '<tbody>';
+
+                    foreach ($webhook_logs as $log) {
+                        $time = date('Y-m-d H:i:s', $log['timestamp']);
+                        $status_color = 'green';
+                        if (strpos($log['status'], 'failed') !== false || $log['status'] === 'unknown_event') {
+                            $status_color = 'red';
+                        } elseif ($log['status'] === 'received') {
+                            $status_color = 'blue';
+                        }
+
+                        echo '<tr>';
+                        echo '<td>' . esc_html($time) . '</td>';
+                        echo '<td><strong>' . esc_html($log['event_label']) . '</strong></td>';
+                        echo '<td><code>' . esc_html($log['job_id']) . '</code></td>';
+                        echo '<td>' . esc_html($log['job_title']) . '</td>';
+                        echo '<td><span style="color: ' . esc_attr($status_color) . ';">' . esc_html($log['status_label']) . '</span></td>';
+                        echo '</tr>';
+                    }
+
+                    echo '</tbody></table>';
+                }
+                ?>
+            </div>
+            <p class="description" style="margin-top: 10px;">
+                <strong>How it works:</strong> যখন SmartRecruiters এ job create/update/delete হবে, webhook automatically trigger
+                হবে এবং
+                আপনার site এ instant update হবে। এখানে সব activity দেখতে পাবেন।
+            </p>
 
             <hr>
             <h2>Sync Status</h2>
@@ -436,6 +513,31 @@ class SmartRecruitersJobSyncPlugin
                     <p><strong>Manual sync only</strong></p>
                     <p>Use the "Sync Jobs Now" button above to update jobs manually.</p>
                 <?php endif; ?>
+            </div>
+
+            <hr>
+            <h2>Cron Schedule Status</h2>
+            <div id="cron-status">
+                <?php
+                $next_scheduled = wp_next_scheduled('smartrecruiters_job_sync_cron');
+                if ($next_scheduled) {
+                    $next_run = date('Y-m-d H:i:s', $next_scheduled);
+                    $time_until = $next_scheduled - time();
+                    $hours_until = round($time_until / 3600, 1);
+
+                    echo '<p><strong>Next Scheduled Run:</strong> ' . esc_html($next_run) . '</p>';
+                    if ($time_until > 0) {
+                        echo '<p><strong>Time Until Next Run:</strong> ' . esc_html($hours_until) . ' hours</p>';
+                    } else {
+                        echo '<p><strong style="color:orange;">Warning:</strong> Next run is overdue. Cron will run on next site visit.</p>';
+                    }
+                } else {
+                    echo '<p><strong style="color:red;">Cron is not scheduled!</strong> It will be rescheduled automatically.</p>';
+                }
+                ?>
+                <p class="description"><em>Note: WordPress cron jobs only run when someone visits your website. For guaranteed
+                        daily runs, consider setting up a real server cron job to visit your site daily, or use webhooks for
+                        real-time updates.</em></p>
             </div>
 
             <hr>
@@ -563,6 +665,9 @@ class SmartRecruitersJobSyncPlugin
      */
     public function admin_init()
     {
+        // Ensure cron is scheduled when admin page loads
+        $this->ensure_cron_scheduled();
+
         register_setting('smartrecruiters_job_sync_settings', 'smartrecruiters_job_sync_options');
 
         add_settings_section(
@@ -695,6 +800,15 @@ class SmartRecruitersJobSyncPlugin
 
 
     /**
+     * Add webhook query var
+     */
+    public function add_webhook_query_var($vars)
+    {
+        $vars[] = 'smartrecruiters_webhook';
+        return $vars;
+    }
+
+    /**
      * Add webhook endpoint
      */
     public function add_webhook_endpoint()
@@ -708,11 +822,29 @@ class SmartRecruitersJobSyncPlugin
      */
     public function handle_webhook_request()
     {
+        // Log all webhook requests for debugging
+        error_log('SmartRecruiters Webhook: Request received - URI: ' . ($_SERVER['REQUEST_URI'] ?? 'N/A'));
+        error_log('SmartRecruiters Webhook: Method: ' . ($_SERVER['REQUEST_METHOD'] ?? 'N/A'));
+        error_log('SmartRecruiters Webhook: Query var: ' . (get_query_var('smartrecruiters_webhook') ? 'YES' : 'NO'));
+
+        // Check query var first
         if (!get_query_var('smartrecruiters_webhook')) {
-            return;
+            // Also check if URL matches webhook endpoint directly
+            $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+            if (strpos($request_uri, 'smartrecruiters-webhook') === false) {
+                return;
+            }
         }
 
-        // Only allow POST requests
+        // Only allow POST requests (but allow GET for testing)
+        if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+            // For testing - return OK
+            http_response_code(200);
+            header('Content-Type: application/json');
+            echo json_encode(array('status' => 'ok', 'message' => 'Webhook endpoint is accessible'));
+            exit;
+        }
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(405);
             exit('Method not allowed');
@@ -722,30 +854,100 @@ class SmartRecruitersJobSyncPlugin
 
         // Check if webhooks are enabled
         if (empty($options['webhook_enabled'])) {
+            error_log('SmartRecruiters Webhook: Webhooks are disabled in settings');
             http_response_code(403);
             exit('Webhooks disabled');
         }
 
+        // Handle webhook handshake (for activation)
+        // SmartRecruiters sends X-Hook-Secret header during handshake that must be echoed back
+        $hook_secret = $_SERVER['HTTP_X_HOOK_SECRET'] ?? '';
+
+        // Also check lowercase header name
+        if (empty($hook_secret)) {
+            $hook_secret = $_SERVER['HTTP_X_HOOK_SECRET'] ?? '';
+        }
+
+        if (!empty($hook_secret)) {
+            error_log('SmartRecruiters Webhook: Handshake request received with secret: ' . substr($hook_secret, 0, 10) . '...');
+            // This is a handshake request - save the secret and return it
+            update_option('smartrecruiters_webhook_secret', $hook_secret);
+
+            // Return the X-Hook-Secret header in response
+            header('X-Hook-Secret: ' . $hook_secret);
+            http_response_code(200);
+            exit('OK');
+        }
+
         // Get raw POST data
         $raw_data = file_get_contents('php://input');
+        error_log('SmartRecruiters Webhook: Raw POST data received: ' . substr($raw_data, 0, 500));
+
         $webhook_data = json_decode($raw_data, true);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        // Log decoded data
+        if ($webhook_data) {
+            error_log('SmartRecruiters Webhook: Decoded data - EventType: ' . ($webhook_data['eventType'] ?? 'N/A'));
+            error_log('SmartRecruiters Webhook: Full webhook data: ' . print_r($webhook_data, true));
+        }
+
+        // If JSON decode fails, it might be an empty handshake request
+        if (json_last_error() !== JSON_ERROR_NONE && !empty($raw_data)) {
+            error_log('SmartRecruiters Webhook: JSON decode error: ' . json_last_error_msg());
             http_response_code(400);
             exit('Invalid JSON');
         }
 
+        // If no data and no hook secret, might be a ping/test request
+        if (empty($webhook_data) && empty($hook_secret)) {
+            error_log('SmartRecruiters Webhook: Empty request - treating as ping');
+            http_response_code(200);
+            exit('OK');
+        }
+
         // Verify webhook signature if secret is set
-        if (!empty($options['webhook_secret'])) {
+        $saved_secret = get_option('smartrecruiters_webhook_secret');
+        if (!empty($saved_secret)) {
             $signature = $_SERVER['HTTP_X_SMARTRECRUITERS_SIGNATURE'] ?? '';
-            if (!$this->verify_webhook_signature($raw_data, $signature, $options['webhook_secret'])) {
-                http_response_code(401);
-                exit('Invalid signature');
+            if (!empty($signature)) {
+                if (!$this->verify_webhook_signature($raw_data, $signature, $saved_secret)) {
+                    error_log('SmartRecruiters Webhook: Signature verification failed');
+                    http_response_code(401);
+                    exit('Invalid signature');
+                }
+                error_log('SmartRecruiters Webhook: Signature verified successfully');
             }
         }
 
-        // Process webhook data
-        $this->process_webhook_data($webhook_data);
+        // Process webhook data (only if we have actual data)
+        if (!empty($webhook_data)) {
+            // Check different possible structures for eventType
+            $event_type = $webhook_data['eventType'] ?? $webhook_data['event_type'] ?? $webhook_data['type'] ?? '';
+
+            // Also check if job data is directly in webhook_data or in 'data' key
+            $job_data = $webhook_data['data'] ?? $webhook_data;
+
+            if (!empty($event_type)) {
+                error_log('SmartRecruiters Webhook: Processing event type: ' . $event_type);
+                // Normalize eventType key and ensure data structure
+                $webhook_data['eventType'] = $event_type;
+                $webhook_data['data'] = $job_data;
+                $this->process_webhook_data($webhook_data);
+            } else {
+                // If no eventType but has job data, try to process it as update
+                if (!empty($job_data['id'])) {
+                    error_log('SmartRecruiters Webhook: No eventType found, treating as job update');
+                    $webhook_data['eventType'] = 'job.updated';
+                    $webhook_data['data'] = $job_data;
+                    $this->process_webhook_data($webhook_data);
+                } else {
+                    error_log('SmartRecruiters Webhook: No eventType found in webhook data');
+                    error_log('SmartRecruiters Webhook: Available keys: ' . implode(', ', array_keys($webhook_data)));
+                }
+            }
+        } else {
+            error_log('SmartRecruiters Webhook: Empty webhook data received');
+        }
 
         http_response_code(200);
         exit('OK');
@@ -768,19 +970,111 @@ class SmartRecruitersJobSyncPlugin
         $event_type = $webhook_data['eventType'] ?? '';
         $job_data = $webhook_data['data'] ?? array();
 
-        error_log('SmartRecruiters Webhook: Received ' . $event_type . ' event');
+        // If job_data is empty, maybe data is directly in webhook_data
+        if (empty($job_data) && isset($webhook_data['id'])) {
+            $job_data = $webhook_data;
+        }
 
+        $job_id = $job_data['id'] ?? 'N/A';
+        $job_title = $job_data['title'] ?? 'N/A';
+
+        // Log webhook event - ALWAYS log when received
+        error_log('SmartRecruiters Webhook: Processing event - Type: ' . $event_type . ', Job ID: ' . $job_id . ', Title: ' . $job_title);
+        $this->log_webhook_activity($event_type, $job_id, $job_title, 'received');
+
+        // Validate job data
+        if (empty($job_id) || $job_id === 'N/A') {
+            error_log('SmartRecruiters Webhook: Missing job ID in webhook data');
+            $this->log_webhook_activity($event_type, 'N/A', $job_title, 'failed');
+            return;
+        }
+
+        // Handle different event types from SmartRecruiters webhooks
+        // Event types: job.created, job.updated, job.status.updated, position.created, position.updated, position.deleted
         switch ($event_type) {
             case 'job.created':
             case 'job.updated':
-                $this->sync_single_job($job_data);
+            case 'job.status.updated':
+            case 'position.created':
+            case 'position.updated':
+                error_log('SmartRecruiters Webhook: Syncing job - ID: ' . $job_id);
+                $result = $this->sync_single_job($job_data);
+                if ($result) {
+                    error_log('SmartRecruiters Webhook: Job sync successful - ID: ' . $job_id);
+                    $this->log_webhook_activity($event_type, $job_id, $job_title, 'success');
+                } else {
+                    error_log('SmartRecruiters Webhook: Job sync failed - ID: ' . $job_id);
+                    $this->log_webhook_activity($event_type, $job_id, $job_title, 'failed');
+                }
                 break;
-            case 'job.deleted':
-                $this->delete_job_by_external_id($job_data['id'] ?? '');
+            case 'position.deleted':
+                error_log('SmartRecruiters Webhook: Deleting job - ID: ' . $job_id);
+                $result = $this->delete_job_by_external_id($job_id);
+                if ($result) {
+                    error_log('SmartRecruiters Webhook: Job deleted successfully - ID: ' . $job_id);
+                    $this->log_webhook_activity($event_type, $job_id, $job_title, 'deleted');
+                } else {
+                    error_log('SmartRecruiters Webhook: Job delete failed - ID: ' . $job_id);
+                    $this->log_webhook_activity($event_type, $job_id, $job_title, 'delete_failed');
+                }
                 break;
             default:
-                error_log('SmartRecruiters Webhook: Unknown event type ' . $event_type);
+                error_log('SmartRecruiters Webhook: Unknown event type - ' . $event_type);
+                $this->log_webhook_activity($event_type, $job_id, $job_title, 'unknown_event');
         }
+    }
+
+    /**
+     * Log webhook activity for admin display
+     */
+    private function log_webhook_activity($event_type, $job_id, $job_title, $status)
+    {
+        $logs = get_option('smartrecruiters_webhook_logs', array());
+
+        // Keep only last 50 entries
+        if (count($logs) >= 50) {
+            $logs = array_slice($logs, -49);
+        }
+
+        $event_labels = array(
+            'job.created' => 'Job Created',
+            'job.updated' => 'Job Updated',
+            'job.status.updated' => 'Job Status Updated',
+            'position.created' => 'Position Created',
+            'position.updated' => 'Position Updated',
+            'position.deleted' => 'Position Deleted'
+        );
+
+        $status_labels = array(
+            'received' => 'Received',
+            'success' => 'Success',
+            'failed' => 'Failed',
+            'deleted' => 'Deleted',
+            'delete_failed' => 'Delete Failed',
+            'unknown_event' => 'Unknown Event'
+        );
+
+        $log_entry = array(
+            'timestamp' => time(),
+            'event_type' => $event_type,
+            'event_label' => $event_labels[$event_type] ?? $event_type,
+            'job_id' => $job_id,
+            'job_title' => $job_title,
+            'status' => $status,
+            'status_label' => $status_labels[$status] ?? $status
+        );
+
+        array_unshift($logs, $log_entry);
+        update_option('smartrecruiters_webhook_logs', $logs, false);
+
+        // Also log to error_log for debugging
+        error_log(sprintf(
+            'SmartRecruiters Webhook: %s - Job ID: %s, Title: %s, Status: %s',
+            $event_labels[$event_type] ?? $event_type,
+            $job_id,
+            $job_title,
+            $status_labels[$status] ?? $status
+        ));
     }
 
     /**
@@ -789,7 +1083,7 @@ class SmartRecruitersJobSyncPlugin
     private function sync_single_job($job_data)
     {
         if (empty($job_data['id'])) {
-            return;
+            return false;
         }
 
         // Check if job already exists
@@ -797,12 +1091,12 @@ class SmartRecruitersJobSyncPlugin
 
         if ($existing_post) {
             // Update existing job
-            $this->update_job_post($existing_post->ID, $job_data);
-            error_log('SmartRecruiters Webhook: Updated job ' . $job_data['id']);
+            $result = $this->update_job_post($existing_post->ID, $job_data);
+            return $result !== false;
         } else {
             // Create new job
-            $this->create_job_from_webhook($job_data);
-            error_log('SmartRecruiters Webhook: Created job ' . $job_data['id']);
+            $result = $this->create_job_from_webhook($job_data);
+            return $result !== false;
         }
     }
 
@@ -825,11 +1119,16 @@ class SmartRecruitersJobSyncPlugin
      */
     private function delete_job_by_external_id($external_id)
     {
+        if (empty($external_id)) {
+            return false;
+        }
+
         $post = $this->find_job_by_external_id($external_id);
         if ($post) {
-            wp_delete_post($post->ID, true);
-            error_log('SmartRecruiters Webhook: Deleted job ' . $external_id);
+            $deleted = wp_delete_post($post->ID, true);
+            return $deleted !== false;
         }
+        return false;
     }
 
     /**
@@ -837,8 +1136,11 @@ class SmartRecruitersJobSyncPlugin
      */
     private function create_job_from_webhook($job_data)
     {
+        // If webhook data doesn't have full details, fetch from API
+        $job_data = $this->enrich_job_data($job_data);
+
         $api_sync = new SmartRecruitersAPISync();
-        $api_sync->create_job($job_data);
+        return $api_sync->create_job($job_data);
     }
 
     /**
@@ -846,8 +1148,61 @@ class SmartRecruitersJobSyncPlugin
      */
     private function update_job_post($post_id, $job_data)
     {
+        // If webhook data doesn't have full details, fetch from API
+        $job_data = $this->enrich_job_data($job_data);
+
         $api_sync = new SmartRecruitersAPISync();
-        $api_sync->update_job($post_id, $job_data);
+        return $api_sync->update_job($post_id, $job_data);
+    }
+
+    /**
+     * Enrich job data by fetching full details from API if needed
+     */
+    private function enrich_job_data($job_data)
+    {
+        // If we already have full job data (has jobAd or other detailed fields), return as is
+        if (!empty($job_data['jobAd']) || !empty($job_data['department']) || !empty($job_data['location'])) {
+            return $job_data;
+        }
+
+        // Otherwise, fetch full job details from API
+        $job_id = $job_data['id'] ?? '';
+        if (empty($job_id)) {
+            return $job_data;
+        }
+
+        $options = get_option('smartrecruiters_job_sync_options');
+        $access_token = $this->get_access_token();
+
+        if (!$access_token) {
+            error_log('SmartRecruiters Webhook: Failed to get access token for enriching job data');
+            return $job_data;
+        }
+
+        $job_url = rtrim($options['api_url'], '/') . '/jobs/' . $job_id;
+        $response = wp_remote_get($job_url, array(
+            'timeout' => 30,
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json'
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            error_log('SmartRecruiters Webhook: Failed to fetch job details: ' . $response->get_error_message());
+            return $job_data;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        if ($response_code === 200) {
+            $full_job_data = json_decode(wp_remote_retrieve_body($response), true);
+            if ($full_job_data) {
+                return $full_job_data;
+            }
+        }
+
+        return $job_data;
     }
 
     /**
@@ -935,13 +1290,22 @@ class SmartRecruitersJobSyncPlugin
 
         $webhook_url = home_url('/smartrecruiters-webhook/');
 
+        // SmartRecruiters API event names
         $webhook_data = array(
             'callbackUrl' => $webhook_url,
-            'events' => array('job.created', 'job.updated', 'job.deleted'),
-            'active' => true
+            'events' => array(
+                'job.created',
+                'job.updated',
+                'job.status.updated',
+                'position.created',
+                'position.updated',
+                'position.deleted'
+            )
         );
 
-        $response = wp_remote_post($options['api_url'] . '/webhooks', array(
+        // Use correct API endpoint: /webhooks-api/v201907/subscriptions
+        $webhook_endpoint = rtrim($options['api_url'], '/') . '/webhooks-api/v201907/subscriptions';
+        $response = wp_remote_post($webhook_endpoint, array(
             'headers' => array(
                 'Authorization' => 'Bearer ' . $access_token,
                 'Content-Type' => 'application/json'
@@ -962,11 +1326,35 @@ class SmartRecruitersJobSyncPlugin
 
         if ($response_code === 201) {
             $webhook_info = json_decode($response_body, true);
-            update_option('smartrecruiters_webhook_id', $webhook_info['id'] ?? '');
+            $webhook_id = $webhook_info['id'] ?? '';
+            update_option('smartrecruiters_webhook_id', $webhook_id);
+
+            // Activate the webhook subscription (required by SmartRecruiters API)
+            // According to docs: PUT /webhooks-api/v201907/subscriptions/{id}/activation
+            if (!empty($webhook_id)) {
+                $activate_endpoint = rtrim($options['api_url'], '/') . '/webhooks-api/v201907/subscriptions/' . $webhook_id . '/activation';
+                $activate_response = wp_remote_request($activate_endpoint, array(
+                    'method' => 'PUT',
+                    'headers' => array(
+                        'Authorization' => 'Bearer ' . $access_token
+                    ),
+                    'timeout' => 30
+                ));
+
+                if (!is_wp_error($activate_response)) {
+                    $activate_code = wp_remote_retrieve_response_code($activate_response);
+                    if ($activate_code === 200 || $activate_code === 204) {
+                        return array(
+                            'success' => true,
+                            'message' => 'Webhook subscription created and activated successfully'
+                        );
+                    }
+                }
+            }
 
             return array(
                 'success' => true,
-                'message' => 'Webhook subscription created successfully'
+                'message' => 'Webhook subscription created successfully (activation may be required)'
             );
         } else {
             return array(
@@ -1000,7 +1388,9 @@ class SmartRecruitersJobSyncPlugin
             );
         }
 
-        $response = wp_remote_request($options['api_url'] . '/webhooks/' . $webhook_id, array(
+        // Use correct API endpoint: /webhooks-api/v201907/subscriptions/{id}
+        $webhook_endpoint = rtrim($options['api_url'], '/') . '/webhooks-api/v201907/subscriptions/' . $webhook_id;
+        $response = wp_remote_request($webhook_endpoint, array(
             'method' => 'DELETE',
             'headers' => array(
                 'Authorization' => 'Bearer ' . $access_token
@@ -1019,6 +1409,7 @@ class SmartRecruitersJobSyncPlugin
 
         if ($response_code === 204 || $response_code === 200) {
             delete_option('smartrecruiters_webhook_id');
+            delete_option('smartrecruiters_webhook_secret');
 
             return array(
                 'success' => true,
@@ -1115,11 +1506,31 @@ class SmartRecruitersJobSyncPlugin
     public function activate()
     {
         $this->register_job_post_type();
+
+        // Add webhook endpoint rewrite rule
+        $this->add_webhook_endpoint();
+
+        // Flush rewrite rules to make endpoint accessible
         flush_rewrite_rules();
 
         // Schedule initial cron
-        if (!wp_next_scheduled('smartrecruiters_job_sync_cron')) {
-            wp_schedule_event(time(), 'daily', 'smartrecruiters_job_sync_cron');
+        $this->ensure_cron_scheduled();
+    }
+
+    /**
+     * Ensure cron is scheduled (called on activation and admin page load)
+     */
+    private function ensure_cron_scheduled()
+    {
+        $next_scheduled = wp_next_scheduled('smartrecruiters_job_sync_cron');
+
+        // If not scheduled or scheduled more than 25 hours ago, reschedule
+        if (!$next_scheduled || ($next_scheduled - time()) < -3600) {
+            // Clear any existing schedule
+            wp_clear_scheduled_hook('smartrecruiters_job_sync_cron');
+            // Schedule for next day at the same time (or immediately if way past)
+            $schedule_time = time() + (24 * 60 * 60); // 24 hours from now
+            wp_schedule_event($schedule_time, 'daily', 'smartrecruiters_job_sync_cron');
         }
     }
 
