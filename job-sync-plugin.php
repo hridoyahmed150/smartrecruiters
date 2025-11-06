@@ -45,6 +45,8 @@ class SmartRecruitersJobSyncPlugin
         // AJAX hooks for webhook management
         add_action('wp_ajax_create_smartrecruiters_webhook', array($this, 'create_webhook_ajax'));
         add_action('wp_ajax_delete_smartrecruiters_webhook', array($this, 'delete_webhook_ajax'));
+        add_action('wp_ajax_refresh_smartrecruiters_webhooks', array($this, 'refresh_webhooks_ajax'));
+        add_action('wp_ajax_activate_smartrecruiters_webhook', array($this, 'activate_webhook_ajax'));
 
         // Webhook endpoint for real-time job updates
         add_filter('query_vars', array($this, 'add_webhook_query_var'));
@@ -410,11 +412,28 @@ class SmartRecruitersJobSyncPlugin
             <hr>
 
             <h2>Manual Sync</h2>
-            <p>Click the button below to manually sync jobs from SmartRecruiters API.</p>
             <button type="button" id="manual-sync-btn" class="button button-primary">Sync Jobs Now</button>
             <div id="sync-status" style="margin-top: 10px;"></div>
-            <textarea id="sync-log" style="margin-top:10px;width:100%;height:180px;white-space:pre;" readonly
-                placeholder="Logs will appear here..."></textarea>
+            <?php
+            // Check if we have any active webhooks for this site
+            $webhooks_check = get_option('smartrecruiters_webhooks_list', array());
+            $webhook_url_check = home_url('/smartrecruiters-webhook/');
+            $has_active_webhook_for_log = false;
+
+            foreach ($webhooks_check as $webhook) {
+                $callback_url = $webhook['callbackUrl'] ?? '';
+                $status = $webhook['status'] ?? 'inactive';
+                if (strpos($callback_url, $webhook_url_check) !== false && $status === 'active') {
+                    $has_active_webhook_for_log = true;
+                    break;
+                }
+            }
+
+            // Hide log box when webhook is active
+            if (!$has_active_webhook_for_log): ?>
+                <textarea id="sync-log" style="margin-top:10px;width:100%;height:180px;white-space:pre;" readonly
+                    placeholder="Logs will appear here..."></textarea>
+            <?php endif; ?>
 
             <hr>
             <h2>Webhook Management</h2>
@@ -426,30 +445,48 @@ class SmartRecruitersJobSyncPlugin
             $webhook_url = home_url('/smartrecruiters-webhook/');
             ?>
 
+            <?php
+            // Check if we have any active webhooks for this site
+            $webhooks = get_option('smartrecruiters_webhooks_list', array());
+            $webhook_url = home_url('/smartrecruiters-webhook/');
+            $has_active_webhook = false;
+
+            foreach ($webhooks as $webhook) {
+                $callback_url = $webhook['callbackUrl'] ?? '';
+                $status = $webhook['status'] ?? 'inactive';
+                if (strpos($callback_url, $webhook_url) !== false && $status === 'active') {
+                    $has_active_webhook = true;
+                    break;
+                }
+            }
+            ?>
+
             <div style="background: #f0f0f1; padding: 15px; margin: 15px 0; border-left: 4px solid #2271b1;">
-                <p><strong>Webhook URL:</strong> <code><?php echo esc_html($webhook_url); ?></code></p>
-                <?php if ($webhook_id): ?>
-                    <p><strong>Webhook ID:</strong> <code><?php echo esc_html($webhook_id); ?></code></p>
-                <?php endif; ?>
-                <?php if ($webhook_secret): ?>
-                    <p><strong>Handshake Status:</strong> <span style="color:green;">✅ Completed</span></p>
-                    <p><strong>Webhook Secret:</strong> <code><?php echo esc_html(substr($webhook_secret, 0, 20)) . '...'; ?></code>
-                    </p>
+                <?php if ($webhook_secret || $has_active_webhook): ?>
+                    <p><strong>Webhook Status:</strong> <span style="color:green;">✅ Active</span></p>
                 <?php else: ?>
-                    <p><strong>Handshake Status:</strong> <span style="color:orange;">⏳ Pending</span></p>
-                    <p class="description">Webhook create করার পর activate করলে handshake automatically হবে।</p>
+                    <p><strong>Webhook Status:</strong> <span style="color:orange;">⏳ Inactive</span></p>
                 <?php endif; ?>
             </div>
 
-            <button type="button" id="create-webhook-btn" class="button button-secondary">Create Webhook Subscription</button>
+            <?php
+            // Hide create webhook button when we have active webhook for this site
+            if (!$has_active_webhook): ?>
+                <button type="button" id="create-webhook-btn" class="button button-secondary">Create Webhook Subscription</button>
+            <?php endif; ?>
+
+            <button type="button" id="refresh-webhooks-btn" class="button button-secondary">Refresh Webhook List</button>
             <button type="button" id="delete-webhook-btn" class="button button-secondary">Delete Webhook Subscription</button>
             <div id="webhook-status" style="margin-top: 10px;"></div>
 
-            <p class="description" style="margin-top: 15px;">
-                <strong>Note:</strong> Webhook subscription create করার পর, SmartRecruiters automatically আপনার endpoint এ একটি
-                handshake request পাঠাবে।
-                Code automatically সেই request handle করবে এবং webhook activate হবে।
-            </p>
+            <div id="webhook-list" style="margin-top: 20px;">
+                <?php
+                // Auto-load webhooks on page load (silently, don't show error if fails)
+                $this->get_all_webhooks();
+                $this->display_webhook_list();
+                ?>
+            </div>
+
 
             <hr>
             <h2>Webhook Activity Log</h2>
@@ -576,15 +613,20 @@ class SmartRecruitersJobSyncPlugin
                             if (data.success) {
                                 status.innerHTML = '<p style="color: green;">' + (data.data.message || 'Sync completed') + '</p>';
                             } else {
-                                status.innerHTML = '<p style="color: red;">' + (data.data || 'Sync failed') + '</p>';
+                                status.innerHTML = '<p style="color: red;">' + (data.data.message || 'Sync failed') + '</p>';
                             }
-                            var logs = (data.data && data.data.logs) ? data.data.logs : [];
-                            document.getElementById('sync-log').value = Array.isArray(logs) ? logs.join('\n') : (logs || '');
-                            console.log(data);
+                            var syncLog = document.getElementById('sync-log');
+                            if (syncLog) {
+                                var logs = (data.data && data.data.logs) ? data.data.logs : [];
+                                syncLog.value = Array.isArray(logs) ? logs.join('\n') : (logs || '');
+                            }
                         })
                         .catch(error => {
                             status.innerHTML = '<p style="color: red;">Request error: ' + error.message + '</p>';
-                            document.getElementById('sync-log').value = 'Request error: ' + error.message;
+                            var syncLog = document.getElementById('sync-log');
+                            if (syncLog) {
+                                syncLog.value = 'Request error: ' + error.message;
+                            }
                         })
                         .finally(() => {
                             btn.disabled = false;
@@ -593,25 +635,61 @@ class SmartRecruitersJobSyncPlugin
                 });
 
                 // Webhook management
-                document.getElementById('create-webhook-btn').addEventListener('click', function () {
+                var createWebhookBtn = document.getElementById('create-webhook-btn');
+                if (createWebhookBtn) {
+                    createWebhookBtn.addEventListener('click', function () {
+                        var btn = this;
+                        var status = document.getElementById('webhook-status');
+
+                        btn.disabled = true;
+                        btn.textContent = 'Creating...';
+                        status.innerHTML = '<p>Creating webhook subscription...</p>';
+
+                        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: 'action=create_smartrecruiters_webhook&nonce=<?php echo wp_create_nonce('webhook_management_nonce'); ?>'
+                        })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    status.innerHTML = '<p style="color: green;">' + (data.data.message || 'Webhook created successfully') + '</p>';
+                                    setTimeout(function () { location.reload(); }, 2000);
+                                } else {
+                                    status.innerHTML = '<p style="color: red;">' + (data.data.message || 'Failed to create webhook') + '</p>';
+                                }
+                            })
+                            .catch(error => {
+                                status.innerHTML = '<p style="color: red;">Request error: ' + error.message + '</p>';
+                            })
+                            .finally(() => {
+                                btn.disabled = false;
+                                btn.textContent = 'Create Webhook Subscription';
+                            });
+                    });
+                }
+
+                // Refresh webhooks list
+                document.getElementById('refresh-webhooks-btn').addEventListener('click', function () {
                     var btn = this;
                     var status = document.getElementById('webhook-status');
 
                     btn.disabled = true;
-                    btn.textContent = 'Creating...';
-                    status.innerHTML = '<p>Creating webhook subscription...</p>';
+                    btn.textContent = 'Refreshing...';
+                    status.innerHTML = '<p>Refreshing webhook list...</p>';
 
                     fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: 'action=create_smartrecruiters_webhook&nonce=<?php echo wp_create_nonce('webhook_management_nonce'); ?>'
+                        body: 'action=refresh_smartrecruiters_webhooks&nonce=<?php echo wp_create_nonce('webhook_management_nonce'); ?>'
                     })
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
-                                status.innerHTML = '<p style="color: green;">' + (data.data.message || 'Webhook created successfully') + '</p>';
+                                status.innerHTML = '<p style="color: green;">' + (data.data.message || 'Webhooks refreshed successfully') + '</p>';
+                                setTimeout(function () { location.reload(); }, 1000);
                             } else {
-                                status.innerHTML = '<p style="color: red;">' + (data.data || 'Failed to create webhook') + '</p>';
+                                status.innerHTML = '<p style="color: red;">' + (data.data.message || 'Failed to refresh webhooks') + '</p>';
                             }
                         })
                         .catch(error => {
@@ -619,13 +697,18 @@ class SmartRecruitersJobSyncPlugin
                         })
                         .finally(() => {
                             btn.disabled = false;
-                            btn.textContent = 'Create Webhook Subscription';
+                            btn.textContent = 'Refresh Webhook List';
                         });
                 });
 
+                // Delete webhook button
                 document.getElementById('delete-webhook-btn').addEventListener('click', function () {
                     var btn = this;
                     var status = document.getElementById('webhook-status');
+
+                    if (!confirm('Are you sure you want to delete the saved webhook subscription?')) {
+                        return;
+                    }
 
                     btn.disabled = true;
                     btn.textContent = 'Deleting...';
@@ -640,8 +723,9 @@ class SmartRecruitersJobSyncPlugin
                         .then(data => {
                             if (data.success) {
                                 status.innerHTML = '<p style="color: green;">' + (data.data.message || 'Webhook deleted successfully') + '</p>';
+                                setTimeout(function () { location.reload(); }, 2000);
                             } else {
-                                status.innerHTML = '<p style="color: red;">' + (data.data || 'Failed to delete webhook') + '</p>';
+                                status.innerHTML = '<p style="color: red;">' + (data.data.message || 'Failed to delete webhook') + '</p>';
                             }
                         })
                         .catch(error => {
@@ -651,6 +735,78 @@ class SmartRecruitersJobSyncPlugin
                             btn.disabled = false;
                             btn.textContent = 'Delete Webhook Subscription';
                         });
+                });
+
+                // Activate webhook buttons (dynamic)
+                document.addEventListener('click', function (e) {
+                    if (e.target.classList.contains('activate-webhook-btn')) {
+                        var btn = e.target;
+                        var webhookId = btn.getAttribute('data-webhook-id');
+                        var status = document.getElementById('webhook-status');
+
+                        btn.disabled = true;
+                        btn.textContent = 'Activating...';
+                        status.innerHTML = '<p>Activating webhook...</p>';
+
+                        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: 'action=activate_smartrecruiters_webhook&webhook_id=' + encodeURIComponent(webhookId) + '&nonce=<?php echo wp_create_nonce('webhook_management_nonce'); ?>'
+                        })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    status.innerHTML = '<p style="color: green;">' + (data.data.message || 'Webhook activated successfully') + '</p>';
+                                    setTimeout(function () { location.reload(); }, 2000);
+                                } else {
+                                    status.innerHTML = '<p style="color: red;">' + (data.data.message || 'Failed to activate webhook') + '</p>';
+                                }
+                            })
+                            .catch(error => {
+                                status.innerHTML = '<p style="color: red;">Request error: ' + error.message + '</p>';
+                            })
+                            .finally(() => {
+                                btn.disabled = false;
+                                btn.textContent = 'Activate';
+                            });
+                    }
+
+                    // Delete webhook buttons (dynamic)
+                    if (e.target.classList.contains('delete-webhook-btn')) {
+                        var btn = e.target;
+                        var webhookId = btn.getAttribute('data-webhook-id');
+                        var status = document.getElementById('webhook-status');
+
+                        if (!confirm('Are you sure you want to delete this webhook subscription?')) {
+                            return;
+                        }
+
+                        btn.disabled = true;
+                        btn.textContent = 'Deleting...';
+                        status.innerHTML = '<p>Deleting webhook subscription...</p>';
+
+                        fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: 'action=delete_smartrecruiters_webhook&webhook_id=' + encodeURIComponent(webhookId) + '&nonce=<?php echo wp_create_nonce('webhook_management_nonce'); ?>'
+                        })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    status.innerHTML = '<p style="color: green;">' + (data.data.message || 'Webhook deleted successfully') + '</p>';
+                                    setTimeout(function () { location.reload(); }, 2000);
+                                } else {
+                                    status.innerHTML = '<p style="color: red;">' + (data.data.message || 'Failed to delete webhook') + '</p>';
+                                }
+                            })
+                            .catch(error => {
+                                status.innerHTML = '<p style="color: red;">Request error: ' + error.message + '</p>';
+                            })
+                            .finally(() => {
+                                btn.disabled = false;
+                                btn.textContent = btn.textContent.includes('Delete') ? 'Delete' : 'Delete';
+                            });
+                    }
                 });
 
 
@@ -727,7 +883,6 @@ class SmartRecruitersJobSyncPlugin
     public function api_section_callback()
     {
         echo '<p>Configure your SmartRecruiters API credentials and settings below.</p>';
-        echo '<p><strong>Default API URL:</strong> https://api.sandbox.smartrecruiters.com</p>';
     }
 
     /**
@@ -767,10 +922,8 @@ class SmartRecruitersJobSyncPlugin
      */
     public function webhook_section_callback()
     {
-        echo '<p>Configure webhook settings for real-time job updates from SmartRecruiters.</p>';
         $webhook_url = home_url('/smartrecruiters-webhook/');
         echo '<p><strong>Webhook URL:</strong> <code>' . esc_html($webhook_url) . '</code></p>';
-        echo '<p><em>Copy this URL to your SmartRecruiters webhook subscription.</em></p>';
     }
 
     /**
@@ -1256,7 +1409,54 @@ class SmartRecruitersJobSyncPlugin
             wp_send_json_error('Insufficient permissions');
         }
 
-        $result = $this->delete_webhook_subscription();
+        $webhook_id = isset($_POST['webhook_id']) ? sanitize_text_field($_POST['webhook_id']) : '';
+        $result = $this->delete_webhook_subscription($webhook_id);
+
+        if ($result['success']) {
+            wp_send_json_success($result);
+        } else {
+            wp_send_json_error($result);
+        }
+    }
+
+    /**
+     * Refresh webhooks list AJAX handler
+     */
+    public function refresh_webhooks_ajax()
+    {
+        check_ajax_referer('webhook_management_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+
+        $webhooks = $this->get_all_webhooks();
+
+        if ($webhooks['success']) {
+            wp_send_json_success($webhooks);
+        } else {
+            wp_send_json_error($webhooks);
+        }
+    }
+
+    /**
+     * Activate webhook AJAX handler
+     */
+    public function activate_webhook_ajax()
+    {
+        check_ajax_referer('webhook_management_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+
+        $webhook_id = isset($_POST['webhook_id']) ? sanitize_text_field($_POST['webhook_id']) : '';
+
+        if (empty($webhook_id)) {
+            wp_send_json_error(array('message' => 'Webhook ID is required'));
+        }
+
+        $result = $this->activate_webhook_subscription($webhook_id);
 
         if ($result['success']) {
             wp_send_json_success($result);
@@ -1329,32 +1529,12 @@ class SmartRecruitersJobSyncPlugin
             $webhook_id = $webhook_info['id'] ?? '';
             update_option('smartrecruiters_webhook_id', $webhook_id);
 
-            // Activate the webhook subscription (required by SmartRecruiters API)
-            // According to docs: PUT /webhooks-api/v201907/subscriptions/{id}/activation
-            if (!empty($webhook_id)) {
-                $activate_endpoint = rtrim($options['api_url'], '/') . '/webhooks-api/v201907/subscriptions/' . $webhook_id . '/activation';
-                $activate_response = wp_remote_request($activate_endpoint, array(
-                    'method' => 'PUT',
-                    'headers' => array(
-                        'Authorization' => 'Bearer ' . $access_token
-                    ),
-                    'timeout' => 30
-                ));
-
-                if (!is_wp_error($activate_response)) {
-                    $activate_code = wp_remote_retrieve_response_code($activate_response);
-                    if ($activate_code === 200 || $activate_code === 204) {
-                        return array(
-                            'success' => true,
-                            'message' => 'Webhook subscription created and activated successfully'
-                        );
-                    }
-                }
-            }
+            // Refresh webhooks list
+            $this->get_all_webhooks();
 
             return array(
                 'success' => true,
-                'message' => 'Webhook subscription created successfully (activation may be required)'
+                'message' => 'Webhook subscription created successfully. Please activate it using the "Activate" button below.'
             );
         } else {
             return array(
@@ -1365,12 +1545,207 @@ class SmartRecruitersJobSyncPlugin
     }
 
     /**
-     * Delete webhook subscription from SmartRecruiters
+     * Get all webhook subscriptions from SmartRecruiters
      */
-    private function delete_webhook_subscription()
+    private function get_all_webhooks()
     {
         $options = get_option('smartrecruiters_job_sync_options');
-        $webhook_id = get_option('smartrecruiters_webhook_id');
+
+        if (empty($options['api_url']) || empty($options['client_id']) || empty($options['client_secret'])) {
+            return array(
+                'success' => false,
+                'message' => 'API configuration incomplete'
+            );
+        }
+
+        // Get access token
+        $access_token = $this->get_access_token();
+        if (!$access_token) {
+            return array(
+                'success' => false,
+                'message' => 'Failed to obtain access token'
+            );
+        }
+
+        $webhook_endpoint = rtrim($options['api_url'], '/') . '/webhooks-api/v201907/subscriptions';
+        $response = wp_remote_get($webhook_endpoint, array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type' => 'application/json'
+            ),
+            'timeout' => 30
+        ));
+
+        if (is_wp_error($response)) {
+            return array(
+                'success' => false,
+                'message' => 'Request failed: ' . $response->get_error_message()
+            );
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+
+        if ($response_code === 200) {
+            $webhooks_data = json_decode($response_body, true);
+            $webhooks = isset($webhooks_data['content']) ? $webhooks_data['content'] : (is_array($webhooks_data) ? $webhooks_data : array());
+
+            // Save webhooks list
+            update_option('smartrecruiters_webhooks_list', $webhooks);
+
+            return array(
+                'success' => true,
+                'webhooks' => $webhooks,
+                'message' => 'Webhooks retrieved successfully'
+            );
+        } else {
+            return array(
+                'success' => false,
+                'message' => 'Failed to get webhooks: ' . $response_body
+            );
+        }
+    }
+
+    /**
+     * Activate webhook subscription
+     */
+    private function activate_webhook_subscription($webhook_id)
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+
+        if (empty($options['api_url']) || empty($options['client_id']) || empty($options['client_secret'])) {
+            return array(
+                'success' => false,
+                'message' => 'API configuration incomplete'
+            );
+        }
+
+        // Get access token
+        $access_token = $this->get_access_token();
+        if (!$access_token) {
+            return array(
+                'success' => false,
+                'message' => 'Failed to obtain access token'
+            );
+        }
+
+        $activate_endpoint = rtrim($options['api_url'], '/') . '/webhooks-api/v201907/subscriptions/' . $webhook_id . '/activation';
+        $response = wp_remote_request($activate_endpoint, array(
+            'method' => 'PUT',
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type' => 'application/json'
+            ),
+            'timeout' => 30
+        ));
+
+        if (is_wp_error($response)) {
+            return array(
+                'success' => false,
+                'message' => 'Request failed: ' . $response->get_error_message()
+            );
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+
+        if ($response_code === 200 || $response_code === 204) {
+            // Refresh webhooks list
+            $this->get_all_webhooks();
+            return array(
+                'success' => true,
+                'message' => 'Webhook activated successfully'
+            );
+        } else {
+            $response_body = wp_remote_retrieve_body($response);
+            return array(
+                'success' => false,
+                'message' => 'Failed to activate webhook: ' . $response_body
+            );
+        }
+    }
+
+    /**
+     * Display webhook list in admin
+     */
+    private function display_webhook_list()
+    {
+        $webhooks = get_option('smartrecruiters_webhooks_list', array());
+        $webhook_url = home_url('/smartrecruiters-webhook/');
+
+        // Filter only webhooks from our site
+        $our_webhooks = array();
+        foreach ($webhooks as $webhook) {
+            $callback_url = $webhook['callbackUrl'] ?? '';
+            // Check if this webhook belongs to our site
+            if (strpos($callback_url, $webhook_url) !== false) {
+                $our_webhooks[] = $webhook;
+            }
+        }
+
+        if (empty($our_webhooks)) {
+            echo '<p style="color: #666;">No webhooks found for this site. Click "Refresh Webhook List" to load webhooks.</p>';
+            return;
+        }
+
+        // Only show table if we have webhooks from our site
+        if (count($our_webhooks) > 0) {
+            echo '<h3>Webhook Subscriptions for This Site</h3>';
+            echo '<table class="wp-list-table widefat fixed striped">';
+            echo '<thead><tr>';
+            echo '<th style="width: 150px;">Webhook ID</th>';
+            echo '<th>Callback URL</th>';
+            echo '<th style="width: 100px;">Status</th>';
+            echo '<th style="width: 200px;">Actions</th>';
+            echo '</tr></thead>';
+            echo '<tbody>';
+
+            foreach ($our_webhooks as $webhook) {
+                $id = $webhook['id'] ?? '';
+                $callback_url = $webhook['callbackUrl'] ?? '';
+                // Check status field (not active field)
+                $status = $webhook['status'] ?? 'inactive';
+                $is_active = ($status === 'active');
+
+                echo '<tr>';
+                echo '<td><code>' . esc_html(substr($id, 0, 20)) . '...</code></td>';
+                echo '<td>' . esc_html($callback_url) . '</td>';
+
+                if ($is_active) {
+                    echo '<td><span style="color: green;">✅ Active</span></td>';
+                    echo '<td>';
+                    echo '<button type="button" class="button button-small delete-webhook-btn" data-webhook-id="' . esc_attr($id) . '">Delete</button>';
+                    echo '</td>';
+                } else {
+                    echo '<td><span style="color: orange;">⏳ Inactive</span></td>';
+                    echo '<td>';
+                    echo '<button type="button" class="button button-small activate-webhook-btn" data-webhook-id="' . esc_attr($id) . '">Activate</button> ';
+                    echo '<button type="button" class="button button-small delete-webhook-btn" data-webhook-id="' . esc_attr($id) . '">Delete</button>';
+                    echo '</td>';
+                }
+
+                echo '</tr>';
+            }
+
+            echo '</tbody></table>';
+
+            if (count($our_webhooks) > 1) {
+                echo '<p class="description" style="margin-top: 10px; color: #d63638;">';
+                echo '<strong>⚠️ Warning:</strong> Multiple webhook subscriptions found for this site. You may want to delete inactive ones to avoid conflicts.';
+                echo '</p>';
+            }
+        }
+    }
+
+    /**
+     * Delete webhook subscription from SmartRecruiters
+     */
+    private function delete_webhook_subscription($webhook_id = '')
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+
+        if (empty($webhook_id)) {
+            $webhook_id = get_option('smartrecruiters_webhook_id');
+        }
 
         if (empty($webhook_id)) {
             return array(
