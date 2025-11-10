@@ -1,0 +1,276 @@
+[2025-11-10 19:26:24] SmartRecruiters Webhook: Request received - URI: /smartrecruiters-webhook/
+[2025-11-10 19:26:24] SmartRecruiters Webhook: Method: POST
+[2025-11-10 19:26:24] SmartRecruiters Webhook: Query var: YES
+[2025-11-10 19:26:24] SmartRecruiters Webhook: Raw POST data received: {"id":"57f93b94-9fab-411d-be1d-50e07794693f"}
+[2025-11-10 19:26:24] SmartRecruiters Webhook: Header event-name => job.updated
+[2025-11-10 19:26:24] SmartRecruiters Webhook: Header event-version => v1
+[2025-11-10 19:26:24] SmartRecruiters Webhook: Header event-id => b019741a-5a39-45a3-9120-2281439de650
+[2025-11-10 19:26:24] SmartRecruiters Webhook: Header Link => <https://api.sandbox.smartrecruiters.com/jobs/57f93b94-9fab-411d-be1d-50e07794693f>; rel=self
+[2025-11-10 19:26:24] SmartRecruiters Webhook: Header smartrecruiters-timestamp => 1762802783
+[2025-11-10 19:26:24] SmartRecruiters Webhook: Decoded data - EventType: N/A
+[2025-11-10 19:26:24] SmartRecruiters Webhook: Full webhook data: Array
+(
+    [id] => 57f93b94-9fab-411d-be1d-50e07794693f
+)
+
+[2025-11-10 19:26:24] SmartRecruiters Webhook: No eventType found, treating as job update
+[2025-11-10 19:26:24] SmartRecruiters Webhook: Processing event - Type: job.updated, Job ID: 57f93b94-9fab-411d-be1d-50e07794693f, Title: N/A
+[2025-11-10 19:26:24] SmartRecruiters Webhook: Syncing job - ID: 57f93b94-9fab-411d-be1d-50e07794693f
+[2025-11-10 19:26:25] SmartRecruiters Webhook: Job sync successful - ID: 57f93b94-9fab-411d-be1d-50e07794693f
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Request received - URI: /smartrecruiters-webhook/
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Request received - URI: /smartrecruiters-webhook/
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Method: POST
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Method: POST
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Query var: YES
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Query var: YES
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Raw POST data received: {"id":"b8cc79bc-b035-4596-a4d2-a0549746f769"}
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Raw POST data received: {"job_id":"b8cc79bc-b035-4596-a4d2-a0549746f769","position_id":"92cfa015-d7bc-4591-a260-eb4f0ee911f3"}
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Header event-name => job.created
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Header event-name => position.created
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Header event-version => v1
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Header event-version => v1
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Header event-id => b86c39fb-bd80-45ce-b0ce-ced938353426
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Header event-id => 4c37f907-6c87-4fe9-bcb9-7cd7ef56d07b
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Header Link => <https://api.sandbox.smartrecruiters.com/jobs/b8cc79bc-b035-4596-a4d2-a0549746f769>; rel=self
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Header Link => <https://api.sandbox.smartrecruiters.com/jobs/b8cc79bc-b035-4596-a4d2-a0549746f769/positions/92cfa015-d7bc-4591-a260-eb4f0ee911f3>; rel=self
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Header smartrecruiters-timestamp => 1762803308
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Header smartrecruiters-timestamp => 1762803308
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Decoded data - EventType: N/A
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Decoded data - EventType: N/A
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Full webhook data: Array
+(
+    [job_id] => b8cc79bc-b035-4596-a4d2-a0549746f769
+    [position_id] => 92cfa015-d7bc-4591-a260-eb4f0ee911f3
+)
+
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Full webhook data: Array
+(
+    [id] => b8cc79bc-b035-4596-a4d2-a0549746f769
+)
+
+[2025-11-10 19:35:10] SmartRecruiters Webhook: No eventType found in webhook data
+[2025-11-10 19:35:10] SmartRecruiters Webhook: No eventType found, treating as job update
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Available keys: job_id, position_id
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Processing event - Type: job.updated, Job ID: b8cc79bc-b035-4596-a4d2-a0549746f769, Title: N/A
+[2025-11-10 19:35:10] SmartRecruiters Webhook: Syncing job - ID: b8cc79bc-b035-4596-a4d2-a0549746f769
+[2025-11-10 19:35:22] SmartRecruiters Webhook: Request received - URI: /smartrecruiters-webhook/
+[2025-11-10 19:35:22] SmartRecruiters Webhook: Method: POST
+[2025-11-10 19:35:22] SmartRecruiters Webhook: Query var: YES
+[2025-11-10 19:35:22] SmartRecruiters Webhook: Raw POST data received: {"id":"b8cc79bc-b035-4596-a4d2-a0549746f769"}
+[2025-11-10 19:35:22] SmartRecruiters Webhook: Header event-name => job.updated
+[2025-11-10 19:35:22] SmartRecruiters Webhook: Header event-version => v1
+[2025-11-10 19:35:22] SmartRecruiters Webhook: Header event-id => 65e61f0a-b553-43bc-8df2-40037a547757
+[2025-11-10 19:35:22] SmartRecruiters Webhook: Header Link => <https://api.sandbox.smartrecruiters.com/jobs/b8cc79bc-b035-4596-a4d2-a0549746f769>; rel=self
+[2025-11-10 19:35:22] SmartRecruiters Webhook: Header smartrecruiters-timestamp => 1762803321
+[2025-11-10 19:35:22] SmartRecruiters Webhook: Decoded data - EventType: N/A
+[2025-11-10 19:35:22] SmartRecruiters Webhook: Full webhook data: Array
+(
+    [id] => b8cc79bc-b035-4596-a4d2-a0549746f769
+)
+
+[2025-11-10 19:35:22] SmartRecruiters Webhook: No eventType found, treating as job update
+[2025-11-10 19:35:22] SmartRecruiters Webhook: Processing event - Type: job.updated, Job ID: b8cc79bc-b035-4596-a4d2-a0549746f769, Title: N/A
+[2025-11-10 19:35:22] SmartRecruiters Webhook: Syncing job - ID: b8cc79bc-b035-4596-a4d2-a0549746f769
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Request received - URI: /smartrecruiters-webhook/
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Method: POST
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Query var: YES
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Raw POST data received: {"id":"b8cc79bc-b035-4596-a4d2-a0549746f769"}
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Header event-name => job.created
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Header event-version => v1
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Header event-id => b86c39fb-bd80-45ce-b0ce-ced938353426
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Header Link => <https://api.sandbox.smartrecruiters.com/jobs/b8cc79bc-b035-4596-a4d2-a0549746f769>; rel=self
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Header smartrecruiters-timestamp => 1762803391
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Decoded data - EventType: N/A
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Full webhook data: Array
+(
+    [id] => b8cc79bc-b035-4596-a4d2-a0549746f769
+)
+
+[2025-11-10 19:36:32] SmartRecruiters Webhook: No eventType found, treating as job update
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Processing event - Type: job.updated, Job ID: b8cc79bc-b035-4596-a4d2-a0549746f769, Title: N/A
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Syncing job - ID: b8cc79bc-b035-4596-a4d2-a0549746f769
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Request received - URI: /smartrecruiters-webhook/
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Method: POST
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Query var: YES
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Raw POST data received: {"id":"b8cc79bc-b035-4596-a4d2-a0549746f769"}
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Header event-name => job.updated
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Header event-version => v1
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Header event-id => 65e61f0a-b553-43bc-8df2-40037a547757
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Header Link => <https://api.sandbox.smartrecruiters.com/jobs/b8cc79bc-b035-4596-a4d2-a0549746f769>; rel=self
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Header smartrecruiters-timestamp => 1762803391
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Decoded data - EventType: N/A
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Full webhook data: Array
+(
+    [id] => b8cc79bc-b035-4596-a4d2-a0549746f769
+)
+
+[2025-11-10 19:36:32] SmartRecruiters Webhook: No eventType found, treating as job update
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Processing event - Type: job.updated, Job ID: b8cc79bc-b035-4596-a4d2-a0549746f769, Title: N/A
+[2025-11-10 19:36:32] SmartRecruiters Webhook: Syncing job - ID: b8cc79bc-b035-4596-a4d2-a0549746f769
+[2025-11-10 19:36:57] SmartRecruiters Webhook: Request received - URI: /
+[2025-11-10 19:36:57] SmartRecruiters Webhook: Method: GET
+[2025-11-10 19:36:57] SmartRecruiters Webhook: Query var: NO
+[2025-11-10 19:39:35] SmartRecruiters Webhook: Request received - URI: /smartrecruiters-webhook/
+[2025-11-10 19:39:35] SmartRecruiters Webhook: Method: POST
+[2025-11-10 19:39:35] SmartRecruiters Webhook: Query var: YES
+[2025-11-10 19:39:35] SmartRecruiters Webhook: Raw POST data received: {"id":"b8cc79bc-b035-4596-a4d2-a0549746f769"}
+[2025-11-10 19:39:35] SmartRecruiters Webhook: Header event-name => job.created
+[2025-11-10 19:39:35] SmartRecruiters Webhook: Header event-version => v1
+[2025-11-10 19:39:35] SmartRecruiters Webhook: Header event-id => b86c39fb-bd80-45ce-b0ce-ced938353426
+[2025-11-10 19:39:35] SmartRecruiters Webhook: Header Link => <https://api.sandbox.smartrecruiters.com/jobs/b8cc79bc-b035-4596-a4d2-a0549746f769>; rel=self
+[2025-11-10 19:39:35] SmartRecruiters Webhook: Header smartrecruiters-timestamp => 1762803574
+[2025-11-10 19:39:35] SmartRecruiters Webhook: Decoded data - EventType: N/A
+[2025-11-10 19:39:35] SmartRecruiters Webhook: Full webhook data: Array
+(
+    [id] => b8cc79bc-b035-4596-a4d2-a0549746f769
+)
+
+[2025-11-10 19:39:35] SmartRecruiters Webhook: No eventType found, treating as job update
+[2025-11-10 19:39:35] SmartRecruiters Webhook: Processing event - Type: job.updated, Job ID: b8cc79bc-b035-4596-a4d2-a0549746f769, Title: N/A
+[2025-11-10 19:39:35] SmartRecruiters Webhook: Syncing job - ID: b8cc79bc-b035-4596-a4d2-a0549746f769
+[2025-11-10 19:40:02] SmartRecruiters Webhook: Request received - URI: /smartrecruiters-webhook/
+[2025-11-10 19:40:02] SmartRecruiters Webhook: Method: POST
+[2025-11-10 19:40:02] SmartRecruiters Webhook: Query var: YES
+[2025-11-10 19:40:02] SmartRecruiters Webhook: Raw POST data received: {"id":"b8cc79bc-b035-4596-a4d2-a0549746f769"}
+[2025-11-10 19:40:02] SmartRecruiters Webhook: Header event-name => job.updated
+[2025-11-10 19:40:02] SmartRecruiters Webhook: Header event-version => v1
+[2025-11-10 19:40:02] SmartRecruiters Webhook: Header event-id => 65e61f0a-b553-43bc-8df2-40037a547757
+[2025-11-10 19:40:02] SmartRecruiters Webhook: Header Link => <https://api.sandbox.smartrecruiters.com/jobs/b8cc79bc-b035-4596-a4d2-a0549746f769>; rel=self
+[2025-11-10 19:40:02] SmartRecruiters Webhook: Header smartrecruiters-timestamp => 1762803601
+[2025-11-10 19:40:02] SmartRecruiters Webhook: Decoded data - EventType: N/A
+[2025-11-10 19:40:02] SmartRecruiters Webhook: Full webhook data: Array
+(
+    [id] => b8cc79bc-b035-4596-a4d2-a0549746f769
+)
+
+[2025-11-10 19:40:02] SmartRecruiters Webhook: No eventType found, treating as job update
+[2025-11-10 19:40:02] SmartRecruiters Webhook: Processing event - Type: job.updated, Job ID: b8cc79bc-b035-4596-a4d2-a0549746f769, Title: N/A
+[2025-11-10 19:40:02] SmartRecruiters Webhook: Syncing job - ID: b8cc79bc-b035-4596-a4d2-a0549746f769
+[2025-11-10 19:43:57] SmartRecruiters Webhook: Request received - URI: /
+[2025-11-10 19:43:57] SmartRecruiters Webhook: Method: GET
+[2025-11-10 19:43:57] SmartRecruiters Webhook: Query var: NO
+[2025-11-10 19:50:03] SmartRecruiters Webhook: Request received - URI: /smartrecruiters-webhook/
+[2025-11-10 19:50:03] SmartRecruiters Webhook: Method: POST
+[2025-11-10 19:50:03] SmartRecruiters Webhook: Query var: YES
+[2025-11-10 19:50:03] SmartRecruiters Webhook: Raw POST data received: {"id":"b8cc79bc-b035-4596-a4d2-a0549746f769"}
+[2025-11-10 19:50:03] SmartRecruiters Webhook: Header event-name => job.created
+[2025-11-10 19:50:03] SmartRecruiters Webhook: Header event-version => v1
+[2025-11-10 19:50:03] SmartRecruiters Webhook: Header event-id => b86c39fb-bd80-45ce-b0ce-ced938353426
+[2025-11-10 19:50:03] SmartRecruiters Webhook: Header Link => <https://api.sandbox.smartrecruiters.com/jobs/b8cc79bc-b035-4596-a4d2-a0549746f769>; rel=self
+[2025-11-10 19:50:03] SmartRecruiters Webhook: Header smartrecruiters-timestamp => 1762804201
+[2025-11-10 19:50:03] SmartRecruiters Webhook: Decoded data - EventType: N/A
+[2025-11-10 19:50:03] SmartRecruiters Webhook: Full webhook data: Array
+(
+    [id] => b8cc79bc-b035-4596-a4d2-a0549746f769
+)
+
+[2025-11-10 19:50:03] SmartRecruiters Webhook: No eventType found, treating as job update
+[2025-11-10 19:50:03] SmartRecruiters Webhook: Processing event - Type: job.updated, Job ID: b8cc79bc-b035-4596-a4d2-a0549746f769, Title: N/A
+[2025-11-10 19:50:03] SmartRecruiters Webhook: Syncing job - ID: b8cc79bc-b035-4596-a4d2-a0549746f769
+[2025-11-10 19:50:04] SmartRecruiters Webhook: Request received - URI: /smartrecruiters-webhook/
+[2025-11-10 19:50:04] SmartRecruiters Webhook: Method: POST
+[2025-11-10 19:50:04] SmartRecruiters Webhook: Query var: YES
+[2025-11-10 19:50:04] SmartRecruiters Webhook: Raw POST data received: {"id":"b8cc79bc-b035-4596-a4d2-a0549746f769"}
+[2025-11-10 19:50:04] SmartRecruiters Webhook: Header event-name => job.updated
+[2025-11-10 19:50:04] SmartRecruiters Webhook: Header event-version => v1
+[2025-11-10 19:50:04] SmartRecruiters Webhook: Header event-id => 65e61f0a-b553-43bc-8df2-40037a547757
+[2025-11-10 19:50:04] SmartRecruiters Webhook: Header Link => <https://api.sandbox.smartrecruiters.com/jobs/b8cc79bc-b035-4596-a4d2-a0549746f769>; rel=self
+[2025-11-10 19:50:04] SmartRecruiters Webhook: Header smartrecruiters-timestamp => 1762804204
+[2025-11-10 19:50:04] SmartRecruiters Webhook: Decoded data - EventType: N/A
+[2025-11-10 19:50:04] SmartRecruiters Webhook: Full webhook data: Array
+(
+    [id] => b8cc79bc-b035-4596-a4d2-a0549746f769
+)
+
+[2025-11-10 19:50:04] SmartRecruiters Webhook: No eventType found, treating as job update
+[2025-11-10 19:50:04] SmartRecruiters Webhook: Processing event - Type: job.updated, Job ID: b8cc79bc-b035-4596-a4d2-a0549746f769, Title: N/A
+[2025-11-10 19:50:04] SmartRecruiters Webhook: Syncing job - ID: b8cc79bc-b035-4596-a4d2-a0549746f769
+[2025-11-10 19:51:54] SmartRecruiters Webhook: Request received - URI: /smartrecruiters-webhook/
+[2025-11-10 19:51:54] SmartRecruiters Webhook: Method: POST
+[2025-11-10 19:51:54] SmartRecruiters Webhook: Query var: YES
+[2025-11-10 19:51:54] SmartRecruiters Webhook: Raw POST data received: {"job_id":"b8cc79bc-b035-4596-a4d2-a0549746f769","position_id":"92cfa015-d7bc-4591-a260-eb4f0ee911f3"}
+[2025-11-10 19:51:54] SmartRecruiters Webhook: Header event-name => position.deleted
+[2025-11-10 19:51:54] SmartRecruiters Webhook: Header event-version => v1
+[2025-11-10 19:51:54] SmartRecruiters Webhook: Header event-id => dfafcc12-c82e-4ede-bad8-c19da994bfdc
+[2025-11-10 19:51:54] SmartRecruiters Webhook: Header smartrecruiters-timestamp => 1762804313
+[2025-11-10 19:51:54] SmartRecruiters Webhook: Decoded data - EventType: N/A
+[2025-11-10 19:51:54] SmartRecruiters Webhook: Full webhook data: Array
+(
+    [job_id] => b8cc79bc-b035-4596-a4d2-a0549746f769
+    [position_id] => 92cfa015-d7bc-4591-a260-eb4f0ee911f3
+)
+
+[2025-11-10 19:51:54] SmartRecruiters Webhook: No eventType found in webhook data
+[2025-11-10 19:51:54] SmartRecruiters Webhook: Available keys: job_id, position_id
+[2025-11-10 19:51:55] SmartRecruiters Webhook: Request received - URI: /smartrecruiters-webhook/
+[2025-11-10 19:51:55] SmartRecruiters Webhook: Method: POST
+[2025-11-10 19:51:55] SmartRecruiters Webhook: Query var: YES
+[2025-11-10 19:51:55] SmartRecruiters Webhook: Raw POST data received: {"id":"b8cc79bc-b035-4596-a4d2-a0549746f769"}
+[2025-11-10 19:51:55] SmartRecruiters Webhook: Header event-name => job.status.updated
+[2025-11-10 19:51:55] SmartRecruiters Webhook: Header event-version => v1
+[2025-11-10 19:51:55] SmartRecruiters Webhook: Header event-id => 82d13c14-d8ce-4ff4-a50d-70139ea47c52
+[2025-11-10 19:51:55] SmartRecruiters Webhook: Header Link => <https://api.sandbox.smartrecruiters.com/jobs/b8cc79bc-b035-4596-a4d2-a0549746f769/status/history>; rel=self
+[2025-11-10 19:51:55] SmartRecruiters Webhook: Header smartrecruiters-timestamp => 1762804313
+[2025-11-10 19:51:55] SmartRecruiters Webhook: Decoded data - EventType: N/A
+[2025-11-10 19:51:55] SmartRecruiters Webhook: Full webhook data: Array
+(
+    [id] => b8cc79bc-b035-4596-a4d2-a0549746f769
+)
+
+[2025-11-10 19:51:55] SmartRecruiters Webhook: No eventType found, treating as job update
+[2025-11-10 19:51:55] SmartRecruiters Webhook: Processing event - Type: job.updated, Job ID: b8cc79bc-b035-4596-a4d2-a0549746f769, Title: N/A
+[2025-11-10 19:51:55] SmartRecruiters Webhook: Syncing job - ID: b8cc79bc-b035-4596-a4d2-a0549746f769
+[2025-11-10 19:53:02] SmartRecruiters Webhook: Request received - URI: /smartrecruiters-webhook/
+[2025-11-10 19:53:02] SmartRecruiters Webhook: Method: POST
+[2025-11-10 19:53:02] SmartRecruiters Webhook: Query var: YES
+[2025-11-10 19:53:02] SmartRecruiters Webhook: Raw POST data received: {"id":"b8cc79bc-b035-4596-a4d2-a0549746f769"}
+[2025-11-10 19:53:02] SmartRecruiters Webhook: Header event-name => job.status.updated
+[2025-11-10 19:53:02] SmartRecruiters Webhook: Header event-version => v1
+[2025-11-10 19:53:02] SmartRecruiters Webhook: Header event-id => 82d13c14-d8ce-4ff4-a50d-70139ea47c52
+[2025-11-10 19:53:02] SmartRecruiters Webhook: Header Link => <https://api.sandbox.smartrecruiters.com/jobs/b8cc79bc-b035-4596-a4d2-a0549746f769/status/history>; rel=self
+[2025-11-10 19:53:02] SmartRecruiters Webhook: Header smartrecruiters-timestamp => 1762804381
+[2025-11-10 19:53:02] SmartRecruiters Webhook: Decoded data - EventType: N/A
+[2025-11-10 19:53:02] SmartRecruiters Webhook: Full webhook data: Array
+(
+    [id] => b8cc79bc-b035-4596-a4d2-a0549746f769
+)
+
+[2025-11-10 19:53:02] SmartRecruiters Webhook: No eventType found, treating as job update
+[2025-11-10 19:53:02] SmartRecruiters Webhook: Processing event - Type: job.updated, Job ID: b8cc79bc-b035-4596-a4d2-a0549746f769, Title: N/A
+[2025-11-10 19:53:02] SmartRecruiters Webhook: Syncing job - ID: b8cc79bc-b035-4596-a4d2-a0549746f769
+[2025-11-10 19:56:33] SmartRecruiters Webhook: Request received - URI: /smartrecruiters-webhook/
+[2025-11-10 19:56:33] SmartRecruiters Webhook: Method: POST
+[2025-11-10 19:56:33] SmartRecruiters Webhook: Query var: YES
+[2025-11-10 19:56:33] SmartRecruiters Webhook: Raw POST data received: {"id":"b8cc79bc-b035-4596-a4d2-a0549746f769"}
+[2025-11-10 19:56:33] SmartRecruiters Webhook: Header event-name => job.status.updated
+[2025-11-10 19:56:33] SmartRecruiters Webhook: Header event-version => v1
+[2025-11-10 19:56:33] SmartRecruiters Webhook: Header event-id => 82d13c14-d8ce-4ff4-a50d-70139ea47c52
+[2025-11-10 19:56:33] SmartRecruiters Webhook: Header Link => <https://api.sandbox.smartrecruiters.com/jobs/b8cc79bc-b035-4596-a4d2-a0549746f769/status/history>; rel=self
+[2025-11-10 19:56:33] SmartRecruiters Webhook: Header smartrecruiters-timestamp => 1762804591
+[2025-11-10 19:56:33] SmartRecruiters Webhook: Decoded data - EventType: N/A
+[2025-11-10 19:56:33] SmartRecruiters Webhook: Full webhook data: Array
+(
+    [id] => b8cc79bc-b035-4596-a4d2-a0549746f769
+)
+
+[2025-11-10 19:56:33] SmartRecruiters Webhook: No eventType found, treating as job update
+[2025-11-10 19:56:33] SmartRecruiters Webhook: Processing event - Type: job.updated, Job ID: b8cc79bc-b035-4596-a4d2-a0549746f769, Title: N/A
+[2025-11-10 19:56:33] SmartRecruiters Webhook: Syncing job - ID: b8cc79bc-b035-4596-a4d2-a0549746f769
+[2025-11-10 20:07:02] SmartRecruiters Webhook: Request received - URI: /smartrecruiters-webhook/
+[2025-11-10 20:07:02] SmartRecruiters Webhook: Method: POST
+[2025-11-10 20:07:02] SmartRecruiters Webhook: Query var: YES
+[2025-11-10 20:07:02] SmartRecruiters Webhook: Raw POST data received: {"id":"b8cc79bc-b035-4596-a4d2-a0549746f769"}
+[2025-11-10 20:07:02] SmartRecruiters Webhook: Header event-name => job.status.updated
+[2025-11-10 20:07:02] SmartRecruiters Webhook: Header event-version => v1
+[2025-11-10 20:07:02] SmartRecruiters Webhook: Header event-id => 82d13c14-d8ce-4ff4-a50d-70139ea47c52
+[2025-11-10 20:07:02] SmartRecruiters Webhook: Header Link => <https://api.sandbox.smartrecruiters.com/jobs/b8cc79bc-b035-4596-a4d2-a0549746f769/status/history>; rel=self
+[2025-11-10 20:07:02] SmartRecruiters Webhook: Header smartrecruiters-timestamp => 1762805221
+[2025-11-10 20:07:02] SmartRecruiters Webhook: Decoded data - EventType: N/A
+[2025-11-10 20:07:02] SmartRecruiters Webhook: Full webhook data: Array
+(
+    [id] => b8cc79bc-b035-4596-a4d2-a0549746f769
+)
+
+[2025-11-10 20:07:02] SmartRecruiters Webhook: No eventType found, treating as job update
+[2025-11-10 20:07:02] SmartRecruiters Webhook: Processing event - Type: job.updated, Job ID: b8cc79bc-b035-4596-a4d2-a0549746f769, Title: N/A
+[2025-11-10 20:07:02] SmartRecruiters Webhook: Syncing job - ID: b8cc79bc-b035-4596-a4d2-a0549746f769
