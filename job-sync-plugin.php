@@ -55,6 +55,7 @@ class SmartRecruitersJobSyncPlugin
         add_filter('query_vars', array($this, 'add_webhook_query_var'));
         add_action('init', array($this, 'add_webhook_endpoint'));
         add_action('template_redirect', array($this, 'handle_webhook_request'));
+        add_action('smartrecruiters_retry_job_sync', array($this, 'retry_job_sync'), 10, 1);
     }
 
     /**
@@ -551,11 +552,7 @@ class SmartRecruitersJobSyncPlugin
                 }
                 ?>
             </div>
-            <p class="description" style="margin-top: 10px;">
-                <strong>How it works:</strong> যখন SmartRecruiters এ job create/update/delete হবে, webhook automatically trigger
-                হবে এবং
-                আপনার site এ instant update হবে। এখানে সব activity দেখতে পাবেন।
-            </p>
+
 
             <hr>
             <h2>Sync Status</h2>
@@ -1228,6 +1225,7 @@ class SmartRecruitersJobSyncPlugin
                         $details = $this->last_sync_error ?: 'Unable to save job';
                         if ($this->should_treat_as_skip($details)) {
                             $this->log_webhook_activity($event_type, $job_id, $job_title, 'skipped', $details, true);
+                            $this->schedule_job_sync_retry($job_id);
                         } else {
                             $this->log_webhook_activity($event_type, $job_id, $job_title, 'failed', $details, true);
                         }
@@ -1246,8 +1244,27 @@ class SmartRecruitersJobSyncPlugin
                         $details = $this->last_sync_error ?: 'Job not found locally';
                         if ($this->should_treat_as_skip($details)) {
                             $this->log_webhook_activity($event_type, $job_id, $job_title, 'skipped', $details, true);
+                            $this->schedule_job_sync_retry($job_id);
                         } else {
                             $this->log_webhook_activity($event_type, $job_id, $job_title, 'delete_failed', $details, true);
+                        }
+                    }
+                    break;
+                case 'job.retry':
+                    $this->log_webhook_debug('SmartRecruiters Webhook: Job retry sync - ID: ' . $job_id . ' (event: ' . $event_type . ')');
+                    $result = $this->sync_single_job($job_data);
+                    if ($result) {
+                        $this->log_webhook_debug('SmartRecruiters Webhook: Job retry sync successful - ID: ' . $job_id);
+                        $resolved_title = $this->last_synced_title ?: $job_title;
+                        $this->log_webhook_activity($event_type, $job_id, $resolved_title, 'success', '', true);
+                    } else {
+                        $this->log_webhook_debug('SmartRecruiters Webhook: Job retry sync failed - ID: ' . $job_id);
+                        $details = $this->last_sync_error ?: 'Unable to retry sync job';
+                        if ($this->should_treat_as_skip($details)) {
+                            $this->log_webhook_activity($event_type, $job_id, $job_title, 'skipped', $details, true);
+                            $this->schedule_job_sync_retry($job_id);
+                        } else {
+                            $this->log_webhook_activity($event_type, $job_id, $job_title, 'failed', $details, true);
                         }
                     }
                     break;
@@ -1262,6 +1279,7 @@ class SmartRecruitersJobSyncPlugin
                         $details = $this->last_sync_error ?: 'Default handler failed';
                         if ($this->should_treat_as_skip($details)) {
                             $this->log_webhook_activity($event_type, $job_id, $job_title, 'skipped', $details, true);
+                            $this->schedule_job_sync_retry($job_id);
                         } else {
                             $this->log_webhook_activity($event_type, $job_id, $job_title, 'failed', $details, true);
                         }
@@ -1287,7 +1305,8 @@ class SmartRecruitersJobSyncPlugin
             'job.status.updated' => 'Job Status Updated',
             'position.created' => 'Position Created',
             'position.updated' => 'Position Updated',
-            'position.deleted' => 'Position Deleted'
+            'position.deleted' => 'Position Deleted',
+            'job.retry' => 'Job Retry Sync'
         );
 
         $status_labels = array(
@@ -2233,6 +2252,65 @@ class SmartRecruitersJobSyncPlugin
         }
 
         return false;
+    }
+
+    /**
+     * Schedule job sync retry
+     */
+    private function schedule_job_sync_retry($job_id)
+    {
+        $job_id = trim((string) $job_id);
+        if (empty($job_id)) {
+            return;
+        }
+
+        $retry_key = 'smartrecruiters_retry_count_' . md5($job_id);
+        $attempts = intval(get_transient($retry_key));
+        $max_attempts = apply_filters('smartrecruiters_retry_max_attempts', 3, $job_id);
+        if ($attempts >= $max_attempts) {
+            $this->log_webhook_debug('SmartRecruiters Webhook: Retry limit reached for job ' . $job_id);
+            return;
+        }
+
+        if (wp_next_scheduled('smartrecruiters_retry_job_sync', array($job_id))) {
+            return;
+        }
+
+        $delay = apply_filters('smartrecruiters_retry_delay_seconds', 60, $job_id, $attempts);
+        $delay = max(30, intval($delay));
+        wp_schedule_single_event(time() + $delay, 'smartrecruiters_retry_job_sync', array($job_id));
+        set_transient($retry_key, $attempts + 1, 30 * MINUTE_IN_SECONDS);
+
+        $this->log_webhook_debug(sprintf('SmartRecruiters Webhook: Scheduled retry #%d for job %s in %d seconds', $attempts + 1, $job_id, $delay));
+        $this->log_webhook_activity('job.retry', $job_id, 'N/A', 'skipped', sprintf('Retry scheduled in %d seconds', $delay));
+    }
+
+    public function retry_job_sync($job_id)
+    {
+        $job_id = trim((string) $job_id);
+        if (empty($job_id)) {
+            return;
+        }
+
+        $this->log_webhook_debug('SmartRecruiters Webhook: Retry job sync triggered for job ' . $job_id);
+        $job_data = array('id' => $job_id);
+        $result = $this->sync_single_job($job_data);
+
+        $retry_key = 'smartrecruiters_retry_count_' . md5($job_id);
+
+        if ($result) {
+            delete_transient($retry_key);
+            $title = $this->last_synced_title ?: 'N/A';
+            $this->log_webhook_activity('job.retry', $job_id, $title, 'success', 'Retry sync succeeded');
+        } else {
+            $details = $this->last_sync_error ?: 'Retry sync failed';
+            if ($this->should_treat_as_skip($details)) {
+                $this->log_webhook_activity('job.retry', $job_id, 'N/A', 'skipped', $details);
+                $this->schedule_job_sync_retry($job_id);
+            } else {
+                $this->log_webhook_activity('job.retry', $job_id, 'N/A', 'failed', $details);
+            }
+        }
     }
 }
 
