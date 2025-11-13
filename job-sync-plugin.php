@@ -658,6 +658,33 @@ class SmartRecruitersJobSyncPlugin
                             btn.disabled = false;
                             btn.textContent = 'Sync Jobs Now';
                         });
+
+
+
+                    // fetch(ajaxurl, {
+                    //     method: 'POST',
+                    //     headers: {
+                    //         'Content-Type': 'application/x-www-form-urlencoded',
+                    //     },
+                    //     body: 'action=manual_smartrecruiters_sync&nonce=' + '<?php //echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
+                    // })
+                    //     .then(response => response.json())
+                    //     .then(data => {
+                    //         // wnat to show the message in a console.log
+                    //         console.log(data);
+                    //         if (data.success) {
+                    //             status.innerHTML = '<p style="color: green;">' + data.data.message + '</p>';
+                    //         } else {
+                    //             status.innerHTML = '<p style="color: red;">Error: ' + data.data + '</p>';
+                    //         }
+                    //     })
+                    //     .catch(error => {
+                    //         status.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+                    //     })
+                    //     .finally(() => {
+                    //         btn.disabled = false;
+                    //         btn.textContent = 'Sync Jobs Now';
+                    //     });
                 });
 
                 // Webhook management
@@ -871,6 +898,14 @@ class SmartRecruitersJobSyncPlugin
             'client_id',
             'Client ID',
             array($this, 'client_id_callback'),
+            'smartrecruiters_job_sync_settings',
+            'smartrecruiters_api_section'
+        );
+
+        add_settings_field(
+            'limit',
+            'Limit',
+            array($this, 'limit_callback'),
             'smartrecruiters_job_sync_settings',
             'smartrecruiters_api_section'
         );
