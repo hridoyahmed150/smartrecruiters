@@ -55,6 +55,7 @@ class SmartRecruitersJobSyncPlugin
         add_filter('query_vars', array($this, 'add_webhook_query_var'));
         add_action('init', array($this, 'add_webhook_endpoint'));
         add_action('template_redirect', array($this, 'handle_webhook_request'));
+        add_action('smartrecruiters_retry_job_sync', array($this, 'retry_job_sync'), 10, 1);
     }
 
     /**
@@ -551,11 +552,7 @@ class SmartRecruitersJobSyncPlugin
                 }
                 ?>
             </div>
-            <p class="description" style="margin-top: 10px;">
-                <strong>How it works:</strong> যখন SmartRecruiters এ job create/update/delete হবে, webhook automatically trigger
-                হবে এবং
-                আপনার site এ instant update হবে। এখানে সব activity দেখতে পাবেন।
-            </p>
+
 
             <hr>
             <h2>Sync Status</h2>
@@ -661,33 +658,6 @@ class SmartRecruitersJobSyncPlugin
                             btn.disabled = false;
                             btn.textContent = 'Sync Jobs Now';
                         });
-
-
-
-                    // fetch(ajaxurl, {
-                    //     method: 'POST',
-                    //     headers: {
-                    //         'Content-Type': 'application/x-www-form-urlencoded',
-                    //     },
-                    //     body: 'action=manual_smartrecruiters_sync&nonce=' + '<?php //echo wp_create_nonce('manual_smartrecruiters_sync_nonce'); ?>'
-                    // })
-                    //     .then(response => response.json())
-                    //     .then(data => {
-                    //         // wnat to show the message in a console.log
-                    //         console.log(data);
-                    //         if (data.success) {
-                    //             status.innerHTML = '<p style="color: green;">' + data.data.message + '</p>';
-                    //         } else {
-                    //             status.innerHTML = '<p style="color: red;">Error: ' + data.data + '</p>';
-                    //         }
-                    //     })
-                    //     .catch(error => {
-                    //         status.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
-                    //     })
-                    //     .finally(() => {
-                    //         btn.disabled = false;
-                    //         btn.textContent = 'Sync Jobs Now';
-                    //     });
                 });
 
                 // Webhook management
@@ -906,14 +876,6 @@ class SmartRecruitersJobSyncPlugin
         );
 
         add_settings_field(
-            'limit',
-            'Limit',
-            array($this, 'limit_callback'),
-            'smartrecruiters_job_sync_settings',
-            'smartrecruiters_api_section'
-        );
-
-        add_settings_field(
             'client_secret',
             'Client Secret',
             array($this, 'client_secret_callback'),
@@ -936,6 +898,22 @@ class SmartRecruitersJobSyncPlugin
             array($this, 'webhook_enabled_callback'),
             'smartrecruiters_job_sync_settings',
             'smartrecruiters_webhook_section'
+        );
+
+        // Sync options section
+        add_settings_section(
+            'smartrecruiters_sync_options_section',
+            'Sync Options',
+            array($this, 'sync_options_section_callback'),
+            'smartrecruiters_job_sync_settings'
+        );
+
+        add_settings_field(
+            'exclude_not_published',
+            'Exclude NOT_PUBLISHED Jobs',
+            array($this, 'exclude_not_published_callback'),
+            'smartrecruiters_job_sync_settings',
+            'smartrecruiters_sync_options_section'
         );
 
 
@@ -1010,6 +988,25 @@ class SmartRecruitersJobSyncPlugin
         $value = isset($options['webhook_secret']) ? $options['webhook_secret'] : '';
         echo '<input type="text" name="smartrecruiters_job_sync_options[webhook_secret]" value="' . esc_attr($value) . '" style="width: 100%;" />';
         echo '<p class="description">Secret key for webhook verification (optional but recommended for security)</p>';
+    }
+
+    /**
+     * Sync options section callback
+     */
+    public function sync_options_section_callback()
+    {
+        echo '<p>Configure which jobs should be synced from SmartRecruiters.</p>';
+    }
+
+    /**
+     * Exclude NOT_PUBLISHED jobs callback
+     */
+    public function exclude_not_published_callback()
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $value = isset($options['exclude_not_published']) ? $options['exclude_not_published'] : '1';
+        echo '<input type="checkbox" name="smartrecruiters_job_sync_options[exclude_not_published]" value="1"' . checked($value, '1', false) . ' />';
+        echo '<p class="description">Only sync jobs with PUBLIC posting status. This applies to manual sync, cron sync, and webhook events.</p>';
     }
 
 
@@ -1263,6 +1260,7 @@ class SmartRecruitersJobSyncPlugin
                         $details = $this->last_sync_error ?: 'Unable to save job';
                         if ($this->should_treat_as_skip($details)) {
                             $this->log_webhook_activity($event_type, $job_id, $job_title, 'skipped', $details, true);
+                            $this->schedule_job_sync_retry($job_id);
                         } else {
                             $this->log_webhook_activity($event_type, $job_id, $job_title, 'failed', $details, true);
                         }
@@ -1281,8 +1279,27 @@ class SmartRecruitersJobSyncPlugin
                         $details = $this->last_sync_error ?: 'Job not found locally';
                         if ($this->should_treat_as_skip($details)) {
                             $this->log_webhook_activity($event_type, $job_id, $job_title, 'skipped', $details, true);
+                            $this->schedule_job_sync_retry($job_id);
                         } else {
                             $this->log_webhook_activity($event_type, $job_id, $job_title, 'delete_failed', $details, true);
+                        }
+                    }
+                    break;
+                case 'job.retry':
+                    $this->log_webhook_debug('SmartRecruiters Webhook: Job retry sync - ID: ' . $job_id . ' (event: ' . $event_type . ')');
+                    $result = $this->sync_single_job($job_data);
+                    if ($result) {
+                        $this->log_webhook_debug('SmartRecruiters Webhook: Job retry sync successful - ID: ' . $job_id);
+                        $resolved_title = $this->last_synced_title ?: $job_title;
+                        $this->log_webhook_activity($event_type, $job_id, $resolved_title, 'success', '', true);
+                    } else {
+                        $this->log_webhook_debug('SmartRecruiters Webhook: Job retry sync failed - ID: ' . $job_id);
+                        $details = $this->last_sync_error ?: 'Unable to retry sync job';
+                        if ($this->should_treat_as_skip($details)) {
+                            $this->log_webhook_activity($event_type, $job_id, $job_title, 'skipped', $details, true);
+                            $this->schedule_job_sync_retry($job_id);
+                        } else {
+                            $this->log_webhook_activity($event_type, $job_id, $job_title, 'failed', $details, true);
                         }
                     }
                     break;
@@ -1297,6 +1314,7 @@ class SmartRecruitersJobSyncPlugin
                         $details = $this->last_sync_error ?: 'Default handler failed';
                         if ($this->should_treat_as_skip($details)) {
                             $this->log_webhook_activity($event_type, $job_id, $job_title, 'skipped', $details, true);
+                            $this->schedule_job_sync_retry($job_id);
                         } else {
                             $this->log_webhook_activity($event_type, $job_id, $job_title, 'failed', $details, true);
                         }
@@ -1322,7 +1340,8 @@ class SmartRecruitersJobSyncPlugin
             'job.status.updated' => 'Job Status Updated',
             'position.created' => 'Position Created',
             'position.updated' => 'Position Updated',
-            'position.deleted' => 'Position Deleted'
+            'position.deleted' => 'Position Deleted',
+            'job.retry' => 'Job Retry Sync'
         );
 
         $status_labels = array(
@@ -1499,6 +1518,24 @@ class SmartRecruitersJobSyncPlugin
     }
 
     /**
+     * Check if job should be excluded based on postingStatus
+     */
+    private function should_exclude_job_by_posting_status($job_data)
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $exclude_not_published = isset($options['exclude_not_published']) ? $options['exclude_not_published'] : '1';
+        $exclude_not_published = ($exclude_not_published === '1' || $exclude_not_published === true || $exclude_not_published === 1);
+
+        if ($exclude_not_published) {
+            $posting_status = strtoupper($job_data['postingStatus'] ?? '');
+            if ($posting_status !== 'PUBLIC') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Sync a single job from webhook data
      */
     private function sync_single_job($job_data)
@@ -1509,6 +1546,9 @@ class SmartRecruitersJobSyncPlugin
             $this->last_sync_error = 'Missing job ID in payload';
             return false;
         }
+
+        // Check if job should be excluded based on postingStatus (after enrichment)
+        // We'll check this after enriching the data in create_job_from_webhook/update_job_post
 
         // Check if job already exists
         $existing_post = $this->find_job_by_external_id($job_data['id']);
@@ -1592,6 +1632,13 @@ class SmartRecruitersJobSyncPlugin
             return false;
         }
 
+        // Check if job should be excluded based on postingStatus
+        if ($this->should_exclude_job_by_posting_status($job_data)) {
+            $posting_status = $job_data['postingStatus'] ?? 'N/A';
+            $this->last_sync_error = 'Job excluded: postingStatus is NOT_PUBLISHED (' . $posting_status . ')';
+            return false;
+        }
+
         unset($job_data['__enrich_error']);
 
         $api_sync = new SmartRecruitersAPISync();
@@ -1608,6 +1655,16 @@ class SmartRecruitersJobSyncPlugin
 
         if (!empty($job_data['__enrich_error'])) {
             $this->last_sync_error = 'SmartRecruiters details unavailable: ' . $job_data['__enrich_error'];
+            return false;
+        }
+
+        // Check if job should be excluded based on postingStatus
+        // If job becomes NOT_PUBLISHED, delete it from database
+        if ($this->should_exclude_job_by_posting_status($job_data)) {
+            $posting_status = $job_data['postingStatus'] ?? 'N/A';
+            $this->last_sync_error = 'Job excluded: postingStatus is NOT_PUBLISHED (' . $posting_status . ')';
+            // Delete the job if it exists and is now NOT_PUBLISHED
+            wp_delete_post($post_id, true);
             return false;
         }
 
@@ -2186,8 +2243,13 @@ class SmartRecruitersJobSyncPlugin
         error_log('SmartRecruiters: Client ID: ' . $options['client_id']);
         error_log('SmartRecruiters: Client Secret: ' . (empty($options['client_secret']) ? 'EMPTY' : 'SET'));
 
+        // Get exclude_not_published setting (default to true if not set)
+        $exclude_not_published = isset($options['exclude_not_published']) ? $options['exclude_not_published'] : '1';
+        $exclude_not_published = ($exclude_not_published === '1' || $exclude_not_published === true || $exclude_not_published === 1);
+
         $filters = array(
-            'exclude_cancelled' => !empty($args['exclude_cancelled'])
+            'exclude_cancelled' => !empty($args['exclude_cancelled']),
+            'exclude_not_published' => $exclude_not_published
         );
         $api_sync = new SmartRecruitersAPISync($filters);
         $result = $api_sync->sync_jobs();
@@ -2269,6 +2331,65 @@ class SmartRecruitersJobSyncPlugin
 
         return false;
     }
+
+    /**
+     * Schedule job sync retry
+     */
+    private function schedule_job_sync_retry($job_id)
+    {
+        $job_id = trim((string) $job_id);
+        if (empty($job_id)) {
+            return;
+        }
+
+        $retry_key = 'smartrecruiters_retry_count_' . md5($job_id);
+        $attempts = intval(get_transient($retry_key));
+        $max_attempts = apply_filters('smartrecruiters_retry_max_attempts', 3, $job_id);
+        if ($attempts >= $max_attempts) {
+            $this->log_webhook_debug('SmartRecruiters Webhook: Retry limit reached for job ' . $job_id);
+            return;
+        }
+
+        if (wp_next_scheduled('smartrecruiters_retry_job_sync', array($job_id))) {
+            return;
+        }
+
+        $delay = apply_filters('smartrecruiters_retry_delay_seconds', 60, $job_id, $attempts);
+        $delay = max(30, intval($delay));
+        wp_schedule_single_event(time() + $delay, 'smartrecruiters_retry_job_sync', array($job_id));
+        set_transient($retry_key, $attempts + 1, 30 * MINUTE_IN_SECONDS);
+
+        $this->log_webhook_debug(sprintf('SmartRecruiters Webhook: Scheduled retry #%d for job %s in %d seconds', $attempts + 1, $job_id, $delay));
+        $this->log_webhook_activity('job.retry', $job_id, 'N/A', 'skipped', sprintf('Retry scheduled in %d seconds', $delay));
+    }
+
+    public function retry_job_sync($job_id)
+    {
+        $job_id = trim((string) $job_id);
+        if (empty($job_id)) {
+            return;
+        }
+
+        $this->log_webhook_debug('SmartRecruiters Webhook: Retry job sync triggered for job ' . $job_id);
+        $job_data = array('id' => $job_id);
+        $result = $this->sync_single_job($job_data);
+
+        $retry_key = 'smartrecruiters_retry_count_' . md5($job_id);
+
+        if ($result) {
+            delete_transient($retry_key);
+            $title = $this->last_synced_title ?: 'N/A';
+            $this->log_webhook_activity('job.retry', $job_id, $title, 'success', 'Retry sync succeeded');
+        } else {
+            $details = $this->last_sync_error ?: 'Retry sync failed';
+            if ($this->should_treat_as_skip($details)) {
+                $this->log_webhook_activity('job.retry', $job_id, 'N/A', 'skipped', $details);
+                $this->schedule_job_sync_retry($job_id);
+            } else {
+                $this->log_webhook_activity('job.retry', $job_id, 'N/A', 'failed', $details);
+            }
+        }
+    }
 }
 
 
@@ -2282,11 +2403,13 @@ class SmartRecruitersAPISync
     private $options;
     private $logs = array();
     private $exclude_cancelled = false;
+    private $exclude_not_published = false;
 
     public function __construct($args = array())
     {
         $this->options = get_option('smartrecruiters_job_sync_options');
         $this->exclude_cancelled = !empty($args['exclude_cancelled']);
+        $this->exclude_not_published = !empty($args['exclude_not_published']);
     }
 
     public function sync_jobs()
@@ -2299,7 +2422,10 @@ class SmartRecruitersAPISync
             }
 
             if ($this->exclude_cancelled) {
-                $this->logs[] = 'Excluding cancelled jobs from manual sync.';
+                $this->logs[] = 'Excluding cancelled jobs from sync.';
+            }
+            if ($this->exclude_not_published) {
+                $this->logs[] = 'Excluding NOT_PUBLISHED jobs from sync (only PUBLIC jobs will be synced).';
             }
 
             // Get the list of jobs first
@@ -2318,11 +2444,21 @@ class SmartRecruitersAPISync
                     continue;
                 }
 
+                // Check cancelled status
                 if ($this->exclude_cancelled) {
                     $status = strtoupper($job_summary['status'] ?? '');
                     $posting_status = strtoupper($job_summary['postingStatus'] ?? '');
                     if ($status === 'CANCELLED' || $status === 'CANCELED' || $posting_status === 'CANCELLED' || $posting_status === 'CANCELED') {
                         $this->logs[] = 'Skipped cancelled job: ' . ($job_summary['title'] ?? $job_id) . ' (' . $job_id . ')';
+                        continue;
+                    }
+                }
+
+                // Check NOT_PUBLISHED status
+                if ($this->exclude_not_published) {
+                    $posting_status = strtoupper($job_summary['postingStatus'] ?? '');
+                    if ($posting_status !== 'PUBLIC') {
+                        $this->logs[] = 'Skipped NOT_PUBLISHED job: ' . ($job_summary['title'] ?? $job_id) . ' (' . $job_id . ') - Status: ' . ($posting_status ?: 'N/A');
                         continue;
                     }
                 }
@@ -2333,11 +2469,21 @@ class SmartRecruitersAPISync
                     $job_details = $job_summary;
                 }
 
+                // Check cancelled status after details fetch
                 if ($this->exclude_cancelled) {
                     $detail_status = strtoupper($job_details['status'] ?? '');
                     $detail_posting_status = strtoupper($job_details['postingStatus'] ?? '');
                     if ($detail_status === 'CANCELLED' || $detail_status === 'CANCELED' || $detail_posting_status === 'CANCELLED' || $detail_posting_status === 'CANCELED') {
                         $this->logs[] = 'Skipped cancelled job after details fetch: ' . ($job_details['title'] ?? $job_id) . ' (' . $job_id . ')';
+                        continue;
+                    }
+                }
+
+                // Check NOT_PUBLISHED status after details fetch
+                if ($this->exclude_not_published) {
+                    $detail_posting_status = strtoupper($job_details['postingStatus'] ?? '');
+                    if ($detail_posting_status !== 'PUBLIC') {
+                        $this->logs[] = 'Skipped NOT_PUBLISHED job after details fetch: ' . ($job_details['title'] ?? $job_id) . ' (' . $job_id . ') - Status: ' . ($detail_posting_status ?: 'N/A');
                         continue;
                     }
                 }
