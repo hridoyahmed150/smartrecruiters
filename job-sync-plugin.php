@@ -900,6 +900,22 @@ class SmartRecruitersJobSyncPlugin
             'smartrecruiters_webhook_section'
         );
 
+        // Sync options section
+        add_settings_section(
+            'smartrecruiters_sync_options_section',
+            'Sync Options',
+            array($this, 'sync_options_section_callback'),
+            'smartrecruiters_job_sync_settings'
+        );
+
+        add_settings_field(
+            'exclude_not_published',
+            'Exclude NOT_PUBLISHED Jobs',
+            array($this, 'exclude_not_published_callback'),
+            'smartrecruiters_job_sync_settings',
+            'smartrecruiters_sync_options_section'
+        );
+
 
     }
 
@@ -972,6 +988,25 @@ class SmartRecruitersJobSyncPlugin
         $value = isset($options['webhook_secret']) ? $options['webhook_secret'] : '';
         echo '<input type="text" name="smartrecruiters_job_sync_options[webhook_secret]" value="' . esc_attr($value) . '" style="width: 100%;" />';
         echo '<p class="description">Secret key for webhook verification (optional but recommended for security)</p>';
+    }
+
+    /**
+     * Sync options section callback
+     */
+    public function sync_options_section_callback()
+    {
+        echo '<p>Configure which jobs should be synced from SmartRecruiters.</p>';
+    }
+
+    /**
+     * Exclude NOT_PUBLISHED jobs callback
+     */
+    public function exclude_not_published_callback()
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $value = isset($options['exclude_not_published']) ? $options['exclude_not_published'] : '1';
+        echo '<input type="checkbox" name="smartrecruiters_job_sync_options[exclude_not_published]" value="1"' . checked($value, '1', false) . ' />';
+        echo '<p class="description">Only sync jobs with PUBLIC posting status. This applies to manual sync, cron sync, and webhook events.</p>';
     }
 
 
@@ -1483,6 +1518,24 @@ class SmartRecruitersJobSyncPlugin
     }
 
     /**
+     * Check if job should be excluded based on postingStatus
+     */
+    private function should_exclude_job_by_posting_status($job_data)
+    {
+        $options = get_option('smartrecruiters_job_sync_options');
+        $exclude_not_published = isset($options['exclude_not_published']) ? $options['exclude_not_published'] : '1';
+        $exclude_not_published = ($exclude_not_published === '1' || $exclude_not_published === true || $exclude_not_published === 1);
+
+        if ($exclude_not_published) {
+            $posting_status = strtoupper($job_data['postingStatus'] ?? '');
+            if ($posting_status !== 'PUBLIC') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Sync a single job from webhook data
      */
     private function sync_single_job($job_data)
@@ -1493,6 +1546,9 @@ class SmartRecruitersJobSyncPlugin
             $this->last_sync_error = 'Missing job ID in payload';
             return false;
         }
+
+        // Check if job should be excluded based on postingStatus (after enrichment)
+        // We'll check this after enriching the data in create_job_from_webhook/update_job_post
 
         // Check if job already exists
         $existing_post = $this->find_job_by_external_id($job_data['id']);
@@ -1576,6 +1632,13 @@ class SmartRecruitersJobSyncPlugin
             return false;
         }
 
+        // Check if job should be excluded based on postingStatus
+        if ($this->should_exclude_job_by_posting_status($job_data)) {
+            $posting_status = $job_data['postingStatus'] ?? 'N/A';
+            $this->last_sync_error = 'Job excluded: postingStatus is NOT_PUBLISHED (' . $posting_status . ')';
+            return false;
+        }
+
         unset($job_data['__enrich_error']);
 
         $api_sync = new SmartRecruitersAPISync();
@@ -1592,6 +1655,16 @@ class SmartRecruitersJobSyncPlugin
 
         if (!empty($job_data['__enrich_error'])) {
             $this->last_sync_error = 'SmartRecruiters details unavailable: ' . $job_data['__enrich_error'];
+            return false;
+        }
+
+        // Check if job should be excluded based on postingStatus
+        // If job becomes NOT_PUBLISHED, delete it from database
+        if ($this->should_exclude_job_by_posting_status($job_data)) {
+            $posting_status = $job_data['postingStatus'] ?? 'N/A';
+            $this->last_sync_error = 'Job excluded: postingStatus is NOT_PUBLISHED (' . $posting_status . ')';
+            // Delete the job if it exists and is now NOT_PUBLISHED
+            wp_delete_post($post_id, true);
             return false;
         }
 
@@ -2170,8 +2243,13 @@ class SmartRecruitersJobSyncPlugin
         error_log('SmartRecruiters: Client ID: ' . $options['client_id']);
         error_log('SmartRecruiters: Client Secret: ' . (empty($options['client_secret']) ? 'EMPTY' : 'SET'));
 
+        // Get exclude_not_published setting (default to true if not set)
+        $exclude_not_published = isset($options['exclude_not_published']) ? $options['exclude_not_published'] : '1';
+        $exclude_not_published = ($exclude_not_published === '1' || $exclude_not_published === true || $exclude_not_published === 1);
+
         $filters = array(
-            'exclude_cancelled' => !empty($args['exclude_cancelled'])
+            'exclude_cancelled' => !empty($args['exclude_cancelled']),
+            'exclude_not_published' => $exclude_not_published
         );
         $api_sync = new SmartRecruitersAPISync($filters);
         $result = $api_sync->sync_jobs();
@@ -2325,11 +2403,13 @@ class SmartRecruitersAPISync
     private $options;
     private $logs = array();
     private $exclude_cancelled = false;
+    private $exclude_not_published = false;
 
     public function __construct($args = array())
     {
         $this->options = get_option('smartrecruiters_job_sync_options');
         $this->exclude_cancelled = !empty($args['exclude_cancelled']);
+        $this->exclude_not_published = !empty($args['exclude_not_published']);
     }
 
     public function sync_jobs()
@@ -2342,7 +2422,10 @@ class SmartRecruitersAPISync
             }
 
             if ($this->exclude_cancelled) {
-                $this->logs[] = 'Excluding cancelled jobs from manual sync.';
+                $this->logs[] = 'Excluding cancelled jobs from sync.';
+            }
+            if ($this->exclude_not_published) {
+                $this->logs[] = 'Excluding NOT_PUBLISHED jobs from sync (only PUBLIC jobs will be synced).';
             }
 
             // Get the list of jobs first
@@ -2361,11 +2444,21 @@ class SmartRecruitersAPISync
                     continue;
                 }
 
+                // Check cancelled status
                 if ($this->exclude_cancelled) {
                     $status = strtoupper($job_summary['status'] ?? '');
                     $posting_status = strtoupper($job_summary['postingStatus'] ?? '');
                     if ($status === 'CANCELLED' || $status === 'CANCELED' || $posting_status === 'CANCELLED' || $posting_status === 'CANCELED') {
                         $this->logs[] = 'Skipped cancelled job: ' . ($job_summary['title'] ?? $job_id) . ' (' . $job_id . ')';
+                        continue;
+                    }
+                }
+
+                // Check NOT_PUBLISHED status
+                if ($this->exclude_not_published) {
+                    $posting_status = strtoupper($job_summary['postingStatus'] ?? '');
+                    if ($posting_status !== 'PUBLIC') {
+                        $this->logs[] = 'Skipped NOT_PUBLISHED job: ' . ($job_summary['title'] ?? $job_id) . ' (' . $job_id . ') - Status: ' . ($posting_status ?: 'N/A');
                         continue;
                     }
                 }
@@ -2376,11 +2469,21 @@ class SmartRecruitersAPISync
                     $job_details = $job_summary;
                 }
 
+                // Check cancelled status after details fetch
                 if ($this->exclude_cancelled) {
                     $detail_status = strtoupper($job_details['status'] ?? '');
                     $detail_posting_status = strtoupper($job_details['postingStatus'] ?? '');
                     if ($detail_status === 'CANCELLED' || $detail_status === 'CANCELED' || $detail_posting_status === 'CANCELLED' || $detail_posting_status === 'CANCELED') {
                         $this->logs[] = 'Skipped cancelled job after details fetch: ' . ($job_details['title'] ?? $job_id) . ' (' . $job_id . ')';
+                        continue;
+                    }
+                }
+
+                // Check NOT_PUBLISHED status after details fetch
+                if ($this->exclude_not_published) {
+                    $detail_posting_status = strtoupper($job_details['postingStatus'] ?? '');
+                    if ($detail_posting_status !== 'PUBLIC') {
+                        $this->logs[] = 'Skipped NOT_PUBLISHED job after details fetch: ' . ($job_details['title'] ?? $job_id) . ' (' . $job_id . ') - Status: ' . ($detail_posting_status ?: 'N/A');
                         continue;
                     }
                 }
